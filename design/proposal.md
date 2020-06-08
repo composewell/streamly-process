@@ -1,6 +1,4 @@
-----------------------
-title: Streaming System Processes
-----------------------
+# Streaming System Processes
 
 Use streamly to execute system commands and connect the input, output and
 error streams to create processing pipelines.
