@@ -1,11 +1,13 @@
 module Streamly.System.Process (
-    fromExe
+    fromExe,
+    fromExeChunks
 ) where
 
 import Streamly.Prelude ((.:))
 import qualified Streamly.Prelude as S
 import qualified Streamly.Internal.Prelude as S
 import qualified Streamly.Internal.FileSystem.Handle as FH
+import Streamly.Internal.Memory.Array.Types (Array)
 import Streamly.Internal.Data.Stream.StreamK.Type (IsStream, fromStream, toStream)
 
 import System.Process
@@ -51,5 +53,32 @@ fromExe fpath argList =
                                 ExitFailure exitCodeInt -> throwM $ ProcessFailed exitCodeInt
 
             return $ S.finally onCompletionAction (FH.toBytes stdOutReadEnd)
+    in
+        S.concatM (liftIO ioOutStream)
+
+fromExeChunks ::    (IsStream t, MonadIO m, MonadCatch m) =>
+                    FilePath ->         -- Path to executable
+                    [String] ->         -- Arguments to pass to executable
+                    t m (Array Word8)   -- Output Stream
+
+fromExeChunks fpath argList = 
+    let
+        ioOutStream = do
+            (stdOutReadEnd, stdOutWriteEnd) <- createPipe
+            
+            let procObj = (proc fpath argList) {std_out = UseHandle stdOutWriteEnd}
+            (_, _, _, procHandle) <- createProcess procObj
+            
+            let
+                onCompletionAction = closeFile >> exceptOnError
+                    where
+                        closeFile = liftIO $ (hClose stdOutReadEnd >> hClose stdOutWriteEnd)
+                        exceptOnError = liftIO $ do
+                            exitCode <- waitForProcess procHandle
+                            case exitCode of
+                                ExitSuccess -> return ()
+                                ExitFailure exitCodeInt -> throwM $ ProcessFailed exitCodeInt
+
+            return $ S.finally onCompletionAction (FH.toChunks stdOutReadEnd)
     in
         S.concatM (liftIO ioOutStream)

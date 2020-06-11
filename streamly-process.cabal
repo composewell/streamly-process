@@ -27,3 +27,18 @@ library
                     , exceptions
   exposed-modules:
                       Streamly.System.Process
+
+--------------------------------
+-- Benchmarks
+--------------------------------
+
+benchmark bench
+  type: exitcode-stdio-1.0
+  hs-source-dirs: Benchmark/System
+  main-is: Process.hs
+  build-depends:
+                      streamly-process
+                    , base
+                    , streamly
+                    , transformers
+                    , gauge
