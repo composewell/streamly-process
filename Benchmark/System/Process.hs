@@ -10,16 +10,25 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 
 import Gauge
 
+devNull :: String
+devNull = "/dev/null"
+
+catBinary :: String
+catBinary = "/bin/cat"
+
+largeFile :: String
+largeFile = "/Users/ahmed/Downloads/largeFile"
+
 runCatCmd :: IO ()
 runCatCmd = do
-    hdl <- openFile "/dev/null" WriteMode
-    FH.fromBytes hdl $ Proc.fromExe "/bin/cat" ["/Users/ahmed/Downloads/largeFile"]
+    hdl <- openFile devNull WriteMode
+    FH.fromBytes hdl $ Proc.fromExe catBinary [largeFile]
     hClose hdl
 
 runCatCmdChunk :: IO ()
 runCatCmdChunk = do
-    hdl <- openFile "/dev/null" WriteMode
-    FH.fromChunks hdl $ Proc.fromExeChunks "/bin/cat" ["/Users/ahmed/Downloads/largeFile"]
+    hdl <- openFile devNull WriteMode
+    FH.fromChunks hdl $ Proc.fromExeChunks catBinary [largeFile]
     hClose hdl
 
 main :: IO ()
