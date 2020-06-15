@@ -1,17 +1,41 @@
 module Main where
 
+import Streamly.Internal.Prelude as S
 import Streamly.System.Process as Proc
 import Streamly.Internal.FileSystem.Handle as FH
 
-import System.IO (openFile, hClose, IOMode(..))
+import System.IO (Handle, IOMode(..), openFile, hClose)
+import System.Process (proc, createProcess, waitForProcess)
+import System.Directory (removeFile)
 
 import Control.Monad (replicateM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
-import Gauge
+import Data.IORef (IORef (..), newIORef, readIORef, writeIORef)
+import Data.Word (Word8)
+
+import Gauge (Benchmarkable, defaultMain, bench, nfIO, perRunEnvWithCleanup)
+
+_a :: Word8
+_a = 97
+
+devRandom :: String
+devRandom = "/dev/random"
 
 devNull :: String
 devNull = "/dev/null"
+
+ddBinary :: String
+ddBinary = "/bin/dd"
+
+ddBlockSize :: Int
+ddBlockSize = 1024
+
+ddBlockCount :: Int
+ddBlockCount = 100              -- ~100 KB
+
+numCharInCharFile :: Int
+numCharInCharFile = 100 * 1024  -- ~100 KB
 
 catBinary :: String
 catBinary = "/bin/cat"
@@ -19,44 +43,100 @@ catBinary = "/bin/cat"
 trBinary :: String
 trBinary = "/usr/bin/tr"
 
-largeFile :: String
-largeFile = "/Users/ahmed/Downloads/largeFile"
+largeByteFile :: String
+largeByteFile = "./largeByteFile"
 
-smallFile :: String
-smallFile = "/Users/ahmed/Downloads/smallFile"
+largeCharFile :: String
+largeCharFile = "./largeCharFile"
 
-runCatCmd :: IO ()
-runCatCmd = do
-    hdl <- openFile devNull WriteMode
-    FH.fromBytes hdl $ Proc.fromExe catBinary [largeFile]
-    hClose hdl
+generateByteFile :: IO ()
+generateByteFile = 
+    let
+        procObj = proc ddBinary [
+                "if=" ++ devRandom,
+                "of=" ++ largeByteFile,
+                "count=" ++ show ddBlockCount,
+                "bs=" ++ show ddBlockSize
+            ]
 
-runCatCmdChunk :: IO ()
-runCatCmdChunk = do
-    hdl <- openFile devNull WriteMode
-    FH.fromChunks hdl $ Proc.fromExeChunks catBinary [largeFile]
-    hClose hdl
+    in
+        do
+            (_, _, _, procHandle) <- createProcess procObj
+            waitForProcess procHandle
+            return ()
 
-runTrCmd :: IO ()
-runTrCmd = do
-    inputHdl <- openFile largeFile ReadMode
-    outputHdl <- openFile devNull WriteMode
-    FH.fromBytes outputHdl $ Proc.thruExe_ trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
-    hClose inputHdl
-    hClose outputHdl
+generateCharFile :: IO ()
+generateCharFile = do
+    handle <- openFile largeCharFile WriteMode
+    FH.fromBytes handle (S.replicate numCharInCharFile _a)
+    hClose handle
 
-runTrCmdChunk :: IO ()
-runTrCmdChunk = do
-    inputHdl <- openFile largeFile ReadMode
-    outputHdl <- openFile devNull WriteMode
-    FH.fromChunks outputHdl $ Proc.thruExeChunks_ trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
-    hClose inputHdl
-    hClose outputHdl
+generateFiles :: IO ()
+generateFiles = generateByteFile >> generateCharFile
+
+deleteFiles :: IO ()
+deleteFiles = 
+    removeFile largeByteFile >> removeFile largeCharFile
+
+runCatCmd :: IORef Handle -> IO ()
+runCatCmd ioRefHandle = do
+    hdl <- readIORef ioRefHandle
+    FH.fromBytes hdl $ Proc.fromExe catBinary [largeByteFile]
+
+runCatCmdChunk :: IORef Handle -> IO ()
+runCatCmdChunk ioRefHandle = do
+    hdl <- readIORef ioRefHandle
+    FH.fromChunks hdl $ 
+        Proc.fromExeChunks catBinary [largeByteFile]
+
+runTrCmd :: IORef (Handle, Handle) -> IO ()
+runTrCmd ioRefHandles = do
+    (inputHdl, outputHdl) <- readIORef ioRefHandles
+    FH.fromBytes outputHdl $ 
+        Proc.thruExe_ trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
+
+runTrCmdChunk :: IORef (Handle, Handle) -> IO ()
+runTrCmdChunk ioRefHandles = do
+    (inputHdl, outputHdl) <- readIORef ioRefHandles
+    FH.fromChunks outputHdl $ 
+        Proc.thruExeChunks_ trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
+
+benchWithOut :: (IORef Handle -> IO ()) -> Benchmarkable
+benchWithOut func = perRunEnvWithCleanup envIO closeHandle func 
+    where 
+    
+    envIO = do
+        outputHdl <- openFile devNull WriteMode
+        newIORef outputHdl
+
+    closeHandle ioRefOutputHdl = do
+        outputHdl <- readIORef ioRefOutputHdl
+        hClose outputHdl
+        writeIORef ioRefOutputHdl outputHdl
+
+benchWithInpOut :: (IORef (Handle, Handle) -> IO ()) -> Benchmarkable
+benchWithInpOut func = perRunEnvWithCleanup envIO closeHandles func 
+    where 
+    
+    envIO = do 
+        inputHdl <- openFile largeCharFile ReadMode
+        outputHdl <- openFile devNull WriteMode
+        newIORef (inputHdl, outputHdl)
+
+    closeHandles ioRefHandles = do
+        (inputHdl, outputHdl) <- readIORef ioRefHandles
+        hClose inputHdl
+        hClose outputHdl
+        writeIORef ioRefHandles (inputHdl, outputHdl)
 
 main :: IO ()
-main = defaultMain [
-        bench "exe - word8" $ nfIO runCatCmd,
-        bench "exe - array of word8" $ nfIO runCatCmdChunk,
-        bench "exe - word8 to word8" $ nfIO runTrCmd,
-        bench "exe - array of word8 to array of word8" $ nfIO runTrCmdChunk
-    ]
+main = do
+    generateFiles
+    defaultMain [
+            bench "exe - word8" $ benchWithOut runCatCmd,
+            bench "exe - array of word8" $ benchWithOut runCatCmdChunk,
+            bench "exe - word8 to word8" $ benchWithInpOut runTrCmd,
+            bench "exe - array of word8 to array of word8" $
+                benchWithInpOut runTrCmdChunk
+        ]
+    deleteFiles

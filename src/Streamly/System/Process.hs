@@ -1,21 +1,38 @@
-module Streamly.System.Process (
-    fromExe,
-    fromExeChunks,
-    thruExe_,
-    thruExeChunks_
-) where
+{-# LANGUAGE FlexibleContexts #-}
 
-import Streamly.Prelude ((.:))
+module Streamly.System.Process
+    ( fromExe
+    , fromExeChunks
+    , thruExe_
+    , thruExeChunks_
+    )
+where
+
 import qualified Streamly.Prelude as S
 import qualified Streamly.Internal.Prelude as S
 import qualified Streamly.Internal.FileSystem.Handle as FH
+import qualified Streamly.Internal.Memory.ArrayStream as AS
+import Streamly.Internal.Data.SVar (MonadAsync, fork)
 import Streamly.Internal.Memory.Array.Types (Array)
-import Streamly.Internal.Data.Stream.StreamK.Type (IsStream, fromStream, toStream, adapt)
 import Streamly.Internal.Data.Stream.Serial (SerialT, serially)
+import Streamly.Internal.Data.Stream.StreamK.Type 
+    ( IsStream
+    , fromStream
+    , toStream
+    , adapt
+    )
 
-import System.Process
 import System.Exit (ExitCode(..))
-import System.IO (hClose)
+import System.IO (hClose, Handle)
+import System.Process
+    ( ProcessHandle
+    , CreateProcess(..)
+    , StdStream (..)
+    , createProcess
+    , createPipe
+    , proc
+    , waitForProcess
+    )
 
 import Data.Word (Word8)
 
@@ -30,7 +47,8 @@ newtype ProcessFailed = ProcessFailed Int
 -- Exception instance of ProcessFailed
 instance Exception ProcessFailed where
 
-    displayException (ProcessFailed exitCodeInt) = "Process Failed With Exit Code " ++ show exitCodeInt
+    displayException (ProcessFailed exitCodeInt) = 
+        "Process Failed With Exit Code " ++ show exitCodeInt
 
 exceptOnError :: (MonadIO m, MonadCatch m) => ProcessHandle -> m ()
 exceptOnError procHandle = liftIO $ do
@@ -39,92 +57,115 @@ exceptOnError procHandle = liftIO $ do
         ExitSuccess -> return ()
         ExitFailure exitCodeInt -> throwM $ ProcessFailed exitCodeInt
 
-fromExe ::  (IsStream t, MonadIO m, MonadCatch m) =>
-            FilePath ->         -- Path to executable
-            [String] ->         -- Arguments to pass to executable
-            t m Word8           -- Output Stream
+{-# INLINE openProc #-}
+openProc :: 
+    FilePath                        -- ^ Path to Executable
+    -> [String]                     -- ^ Arguments
+    -> IO (Handle, ProcessHandle)   
+    -- ^ Handle to read from output of process, process handle
+openProc fpath args = do
+    (readEnd, writeEnd) <- createPipe
+    let 
+        procObj = (proc fpath args) {
+            std_out = UseHandle writeEnd,
+            close_fds = True
+        }
 
-fromExe fpath argList = 
-    let
-        ioOutStream = do
-            (stdOutReadEnd, stdOutWriteEnd) <- createPipe
-            
-            let 
-                procObj = (proc fpath argList) {std_out = UseHandle stdOutWriteEnd}
-                closeHdl = liftIO $ (hClose stdOutReadEnd >> hClose stdOutWriteEnd)
-                onCompletionAction procHandle = closeHdl >> (exceptOnError procHandle)
+    (_, _, _, procHandle) <- createProcess procObj
+    return (readEnd, procHandle)
 
-            (_, _, _, procHandle) <- createProcess procObj
+{-# INLINE withExe #-}
+withExe :: 
+        (IsStream t, MonadCatch m, MonadIO m)
+        => FilePath          -- ^ Path to Executable
+        -> [String]          -- ^ Arguments
+        -> (Handle -> t m a) 
+        -- ^ Given handle to read from output of 
+        -- process generate stream output
+        -> t m a             -- ^ Stream produced
+withExe fpath args genStrm = S.bracket pre post body
+    where
 
-            return $ S.finally (onCompletionAction procHandle) (FH.toBytes stdOutReadEnd)
-    in
-        S.concatM (liftIO ioOutStream)
+    pre = liftIO $ openProc fpath args
 
-fromExeChunks ::    (IsStream t, MonadIO m, MonadCatch m) =>
-                    FilePath ->         -- Path to executable
-                    [String] ->         -- Arguments to pass to executable
-                    t m (Array Word8)   -- Output Stream
+    post (readHdl, procHandle) = 
+        liftIO $ hClose readHdl >> exceptOnError procHandle
 
-fromExeChunks fpath argList = 
-    let
-        ioOutStream = do
-            (stdOutReadEnd, stdOutWriteEnd) <- createPipe
-            
-            let 
-                procObj = (proc fpath argList) {std_out = UseHandle stdOutWriteEnd}
-                closeHdl = liftIO $ (hClose stdOutReadEnd >> hClose stdOutWriteEnd)
-                onCompletionAction procHandle = closeHdl >> (exceptOnError procHandle)
+    body (readHdl, procHandle) = genStrm readHdl
 
-            (_, _, _, procHandle) <- createProcess procObj
+{-# INLINE openProcInp #-}
+openProcInp ::  
+    FilePath                                -- ^ Path to Executable
+    -> [String]                             -- ^ Arguments
+    -> IO (Handle, Handle, ProcessHandle)   
+    -- ^ (Input Handle, Output Handle, Process Handle)
+openProcInp fpath args = do
+    (readInpEnd, writeInpEnd) <- createPipe
+    (readOutEnd, writeOutEnd) <- createPipe
+    let 
+        procObj = (proc fpath args) {
+            std_in = UseHandle readInpEnd, 
+            std_out = UseHandle writeOutEnd,
+            close_fds = True
+        }
 
-            return $ S.finally (onCompletionAction procHandle) (FH.toChunks stdOutReadEnd)
-    in
-        S.concatM (liftIO ioOutStream)
+    (_, _, _, procHandle) <- createProcess procObj
+    return (writeInpEnd, readOutEnd, procHandle)
 
-thruExe_ :: (IsStream t, MonadIO m, MonadCatch m) =>
-            FilePath -> 
-            [String] -> 
-            t m Word8 ->    -- Input Stream
-            t m Word8       -- Output Stream
+{-# INLINE withInpExe #-}
+withInpExe :: 
+    (IsStream t, MonadCatch m, MonadIO m, MonadAsync m)
+    => FilePath             -- ^ Path to Executable
+    -> [String]             -- ^ Arguments
+    -> t m Word8            -- ^ Input stream to the process
+    -> (Handle -> t m a)    
+    -- ^ Handle to read output of process and generate stream
+    -> t m a                -- ^ Stream produced
+withInpExe fpath args input genStrm = S.bracket pre post body
+    where
+        
+        writeAction writeHdl = 
+            FH.fromBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
+    
+        pre = liftIO $ openProcInp fpath args
 
-thruExe_ fpath argList inStream = 
-    let
-        ioOutStream = do
-            (stdInReadEnd, stdInWriteEnd) <- liftIO createPipe
-            (stdOutReadEnd, stdOutWriteEnd) <- liftIO createPipe
-            
-            let 
-                procObj = (proc fpath argList) {std_in = UseHandle stdInReadEnd, std_out = UseHandle stdOutWriteEnd}
-                closeHdl = liftIO $ (hClose stdOutReadEnd >> hClose stdOutWriteEnd >> hClose stdOutReadEnd >> hClose stdOutWriteEnd)
-                onCompletionAction procHandle = closeHdl >> (exceptOnError procHandle)
+        post (writeHdl, readHdl, procHandle) = 
+            liftIO $ hClose readHdl >> exceptOnError procHandle
+        
+        body (writeHdl, readHdl, procHandle) = 
+            S.before (fork $ writeAction writeHdl) $ genStrm readHdl
 
-            FH.fromBytes stdInWriteEnd $ adapt inStream                     -- Write input stream to read end of std-in pipe
-            (_, _, _, procHandle) <- liftIO $ createProcess procObj         -- Create the Process
-            
-            return $ S.finally (onCompletionAction procHandle) (FH.toBytes stdOutReadEnd)
-    in
-        S.concatM ioOutStream
+{-# INLINE fromExe #-}
+fromExe ::  
+    (IsStream t, MonadIO m, MonadCatch m)
+    => FilePath     -- ^ Path to executable
+    -> [String]     -- ^ Arguments to pass to executable
+    -> t m Word8    -- ^ Output Stream
+fromExe fpath args = AS.concat $ withExe fpath args FH.toChunks
 
-thruExeChunks_ :: (IsStream t, MonadIO m, MonadCatch m) =>
-            FilePath -> 
-            [String] -> 
-            t m (Array Word8) ->    -- Input Stream
-            t m (Array Word8)       -- Output Stream
+fromExeChunks ::    
+    (IsStream t, MonadIO m, MonadCatch m)
+    => FilePath             -- ^ Path to executable
+    -> [String]             -- ^ Arguments to pass to executable
+    -> t m (Array Word8)    -- ^ Output Stream
+fromExeChunks fpath args = withExe fpath args FH.toChunks
 
-thruExeChunks_ fpath argList inStream = 
-    let
-        ioOutStream = do
-            (stdInReadEnd, stdInWriteEnd) <- liftIO createPipe
-            (stdOutReadEnd, stdOutWriteEnd) <- liftIO createPipe
-            
-            let 
-                procObj = (proc fpath argList) {std_in = UseHandle stdInReadEnd, std_out = UseHandle stdOutWriteEnd}
-                closeHdl = liftIO $ (hClose stdOutReadEnd >> hClose stdOutWriteEnd >> hClose stdOutReadEnd >> hClose stdOutWriteEnd)
-                onCompletionAction procHandle = closeHdl >> (exceptOnError procHandle)
+{-# INLINE thruExe_ #-}
+thruExe_ :: 
+    (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
+    => FilePath     -- ^ Path to executable
+    -> [String]     -- ^ Arguments to pass to executable
+    -> t m Word8    -- ^ Input Stream
+    -> t m Word8    -- ^ Output Stream
+thruExe_ fpath args inStream = 
+    AS.concat $ withInpExe fpath args inStream FH.toChunks
 
-            FH.fromChunks stdInWriteEnd $ adapt inStream                        -- Write input stream to read end of std-in pipe
-            (_, _, _, procHandle) <- liftIO $ createProcess procObj             -- Create the Process
-            
-            return $ S.finally (onCompletionAction procHandle) (FH.toChunks stdOutReadEnd)
-    in
-        S.concatM ioOutStream
+{-# INLINE thruExeChunks_ #-}
+thruExeChunks_ :: 
+    (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
+    => FilePath             -- ^ Path to executable
+    -> [String]             -- ^ Arguments to pass to executable
+    -> t m (Array Word8)    -- ^ Input Stream
+    -> t m (Array Word8)    -- ^ Output Stream
+thruExeChunks_ fpath args inStream = 
+    withInpExe fpath args (AS.concat inStream) FH.toChunks
