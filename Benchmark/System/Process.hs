@@ -1,8 +1,8 @@
 module Main where
 
-import Streamly.Internal.Prelude as S
-import Streamly.System.Process as Proc
-import Streamly.Internal.FileSystem.Handle as FH
+import qualified Streamly.Internal.Prelude as S
+import qualified Streamly.System.Process as Proc
+import qualified Streamly.Internal.FileSystem.Handle as FH
 
 import System.IO (Handle, IOMode(..), openFile, hClose)
 import System.Process (proc, createProcess, waitForProcess)

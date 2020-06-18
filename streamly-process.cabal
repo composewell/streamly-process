@@ -28,11 +28,11 @@ library
   exposed-modules:
                       Streamly.System.Process
 
---------------------------------
+-------------------------------------------------------------------------------
 -- Benchmarks
---------------------------------
+-------------------------------------------------------------------------------
 
-benchmark bench
+benchmark process-bench
   type: exitcode-stdio-1.0
   hs-source-dirs: Benchmark/System
   main-is: Process.hs
@@ -42,5 +42,22 @@ benchmark bench
                     , streamly
                     , transformers
                     , gauge
+                    , process
+                    , directory
+
+-------------------------------------------------------------------------------
+-- Test suites
+-------------------------------------------------------------------------------
+
+test-suite system-process-test
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test/Streamly/System
+  main-is: Process.hs
+  build-depends:
+                      streamly-process
+                    , streamly
+                    , base
+                    , hspec
+                    , QuickCheck
                     , process
                     , directory
