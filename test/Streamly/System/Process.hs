@@ -41,12 +41,6 @@ _A = 65
 _Z :: Word8
 _Z = 90
 
-toUpper :: Word8 -> Word8
-toUpper char =
-    if(_a <= char && char <= _z)
-    then (char - _a) + _A
-    else char
-
 devRandom :: String
 devRandom = "/dev/random"
 
@@ -80,6 +74,12 @@ maxNumChar = 100 * 1024
 arrayChunkElem :: Int
 arrayChunkElem = 100
 
+toUpper :: Word8 -> Word8
+toUpper char =
+    if(_a <= char && char <= _z)
+    then (char - _a) + _A
+    else char
+
 listEquals :: (Show a, Eq a, MonadIO m)
     => ([a] -> [a] -> Bool) -> [a] -> [a] -> PropertyM m ()
 listEquals eq process_output list = do
@@ -105,20 +105,16 @@ charFile :: String
 charFile = "./largeCharFile"
 
 generateByteFile :: Int -> IO ()
-generateByteFile blockCount = 
-    let
-        procObj = proc ddBinary [
+generateByteFile blockCount = do
+    let procObj = proc ddBinary [
                 "if=" ++ devRandom,
                 "of=" ++ byteFile,
                 "count=" ++ show blockCount,
                 "bs=" ++ show ddBlockSize
             ]
-
-    in
-        do
-            (_, _, _, procHandle) <- createProcess procObj
-            waitForProcess procHandle
-            return ()
+    (_, _, _, procHandle) <- createProcess procObj
+    waitForProcess procHandle
+    return ()
 
 generateCharFile :: Int -> IO ()
 generateCharFile numCharInCharFile = do
@@ -128,78 +124,78 @@ generateCharFile numCharInCharFile = do
 
 fromExe :: Property
 fromExe = 
-    forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
-        let
-            genStrm = Proc.fromExe catBinary [byteFile]
-                
-            ioByteStrm = do
-                handle <- openFile byteFile ReadMode
-                let strm = FH.toBytes handle
-                return $ S.finally (hClose handle) strm
-        in
-            monadicIO $ do
-                run $ generateByteFile numBlock
-                byteStrm <- run ioByteStrm
-                genList <- run $ S.toList genStrm
-                byteList <- run $ S.toList byteStrm
-                run $ removeFile byteFile
-                listEquals (==) genList byteList
+    forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->        
+        monadicIO $ do
+            let
+                genStrm = Proc.fromExe catBinary [byteFile]
+
+                ioByteStrm = do
+                    handle <- openFile byteFile ReadMode
+                    let strm = FH.toBytes handle
+                    return $ S.finally (hClose handle) strm
+
+            run $ generateByteFile numBlock
+            byteStrm <- run ioByteStrm
+            genList <- run $ S.toList genStrm
+            byteList <- run $ S.toList byteStrm
+            run $ removeFile byteFile
+            listEquals (==) genList byteList
 
 fromExeChunks :: Property
 fromExeChunks = 
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
-        let
-            genStrm = Proc.fromExeChunks catBinary [byteFile]
+        monadicIO $ do
+            let
+                genStrm = Proc.fromExeChunks catBinary [byteFile]
                 
-            ioByteStrm = do
-                handle <- openFile byteFile ReadMode
-                let strm = FH.toChunks handle
-                return $ S.finally (hClose handle) strm
-        in
-            monadicIO $ do
-                run $ generateByteFile numBlock
-                byteStrm <- run ioByteStrm
-                genList <- run $ S.toList genStrm
-                byteList <- run $ S.toList byteStrm
-                run $ removeFile byteFile
-                listEquals (==) genList byteList
+                ioByteStrm = do
+                    handle <- openFile byteFile ReadMode
+                    let strm = FH.toBytes handle
+                    return $ S.finally (hClose handle) strm
+
+            run $ generateByteFile numBlock
+            byteStrm <- run ioByteStrm
+            genList <- run $ S.toList (AS.concat genStrm)
+            byteList <- run $ S.toList byteStrm
+            run $ removeFile byteFile
+            listEquals (==) genList byteList
 
 thruExe_ :: Property
 thruExe_ = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
-        let
-            inputStream = S.fromList ls
-            genStrm = Proc.thruExe_ trBinary ["[a-z]", "[A-Z]"] inputStream
-            charUpperStrm = S.map toUpper inputStream
-        in
-            monadicIO $ do
-                genList <- run $ S.toList genStrm
-                charList <- run $ S.toList charUpperStrm
-                listEquals (==) genList charList
+        monadicIO $ do
+            let
+                inputStream = S.fromList ls
+                genStrm = Proc.thruExe_ trBinary ["[a-z]", "[A-Z]"] inputStream
+                charUpperStrm = S.map toUpper inputStream
+
+            genList <- run $ S.toList genStrm
+            charList <- run $ S.toList charUpperStrm
+            listEquals (==) genList charList
 
 thruExeChunks_ :: Property
 thruExeChunks_ = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
-        let
-            inputStream = S.fromList ls
+        monadicIO $ do
+            let
+                inputStream = S.fromList ls
             
-            genStrm = AS.concat $ 
-                Proc.thruExeChunks_ 
-                trBinary 
-                ["[a-z]", "[A-Z]"] 
-                (AS.arraysOf arrayChunkElem inputStream)
-            
-            charUpperStrm = S.map toUpper inputStream
-        in
-            monadicIO $ do
-                genList <- run $ S.toList genStrm
-                charList <- run $ S.toList charUpperStrm
-                listEquals (==) genList charList
+                genStrm = AS.concat $ 
+                    Proc.thruExeChunks_ 
+                    trBinary 
+                    ["[a-z]", "[A-Z]"] 
+                    (AS.arraysOf arrayChunkElem inputStream)
+                
+                charUpperStrm = S.map toUpper inputStream
+
+            genList <- run $ S.toList genStrm
+            charList <- run $ S.toList charUpperStrm
+            listEquals (==) genList charList
 
 main :: IO ()
 main = hspec $ do
     describe "test for process functions" $ do
         prop "fromExe cat = toBytes" fromExe
-        -- prop "fromExeChunks cat = toChunks" fromExeChunks
+        prop "fromExeChunks cat = toChunks" fromExeChunks
         prop "thruExe_ tr = map toUpper " thruExe_
         prop "AS.concat $ thruExeChunks_ tr = map toUpper " thruExeChunks_

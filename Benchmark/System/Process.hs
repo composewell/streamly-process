@@ -51,19 +51,17 @@ largeCharFile = "./largeCharFile"
 
 generateByteFile :: IO ()
 generateByteFile = 
-    let
-        procObj = proc ddBinary [
-                "if=" ++ devRandom,
-                "of=" ++ largeByteFile,
-                "count=" ++ show ddBlockCount,
-                "bs=" ++ show ddBlockSize
-            ]
+    do
+        let procObj = proc ddBinary [
+                    "if=" ++ devRandom,
+                    "of=" ++ largeByteFile,
+                    "count=" ++ show ddBlockCount,
+                    "bs=" ++ show ddBlockSize
+                ]
 
-    in
-        do
-            (_, _, _, procHandle) <- createProcess procObj
-            waitForProcess procHandle
-            return ()
+        (_, _, _, procHandle) <- createProcess procObj
+        waitForProcess procHandle
+        return ()
 
 generateCharFile :: IO ()
 generateCharFile = do
@@ -102,7 +100,8 @@ runTrCmdChunk ioRefHandles = do
         Proc.thruExeChunks_ trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
 
 benchWithOut :: (IORef Handle -> IO ()) -> Benchmarkable
-benchWithOut func = perRunEnvWithCleanup envIO closeHandle func 
+benchWithOut func = perRunEnvWithCleanup envIO closeHandle func
+
     where 
     
     envIO = do
@@ -112,10 +111,10 @@ benchWithOut func = perRunEnvWithCleanup envIO closeHandle func
     closeHandle ioRefOutputHdl = do
         outputHdl <- readIORef ioRefOutputHdl
         hClose outputHdl
-        writeIORef ioRefOutputHdl outputHdl
 
 benchWithInpOut :: (IORef (Handle, Handle) -> IO ()) -> Benchmarkable
-benchWithInpOut func = perRunEnvWithCleanup envIO closeHandles func 
+benchWithInpOut func = perRunEnvWithCleanup envIO closeHandles func
+
     where 
     
     envIO = do 
@@ -127,7 +126,6 @@ benchWithInpOut func = perRunEnvWithCleanup envIO closeHandles func
         (inputHdl, outputHdl) <- readIORef ioRefHandles
         hClose inputHdl
         hClose outputHdl
-        writeIORef ioRefHandles (inputHdl, outputHdl)
 
 main :: IO ()
 main = do
