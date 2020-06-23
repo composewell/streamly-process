@@ -122,12 +122,12 @@ generateCharFile numCharInCharFile = do
     FH.fromBytes handle (S.replicate numCharInCharFile _a)
     hClose handle
 
-fromExe :: Property
-fromExe = 
+toBytes :: Property
+toBytes = 
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->        
         monadicIO $ do
             let
-                genStrm = Proc.fromExe catBinary [byteFile]
+                genStrm = Proc.toBytes catBinary [byteFile]
 
                 ioByteStrm = do
                     handle <- openFile byteFile ReadMode
@@ -141,12 +141,12 @@ fromExe =
             run $ removeFile byteFile
             listEquals (==) genList byteList
 
-fromExeChunks :: Property
-fromExeChunks = 
+toChunks :: Property
+toChunks = 
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
         monadicIO $ do
             let
-                genStrm = Proc.fromExeChunks catBinary [byteFile]
+                genStrm = Proc.toChunks catBinary [byteFile]
                 
                 ioByteStrm = do
                     handle <- openFile byteFile ReadMode
@@ -160,28 +160,28 @@ fromExeChunks =
             run $ removeFile byteFile
             listEquals (==) genList byteList
 
-thruExe_ :: Property
-thruExe_ = 
+transformBytes :: Property
+transformBytes = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             let
                 inputStream = S.fromList ls
-                genStrm = Proc.thruExe_ trBinary ["[a-z]", "[A-Z]"] inputStream
+                genStrm = Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] inputStream
                 charUpperStrm = S.map toUpper inputStream
 
             genList <- run $ S.toList genStrm
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-thruExeChunks_ :: Property
-thruExeChunks_ = 
+transformChunks :: Property
+transformChunks = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             let
                 inputStream = S.fromList ls
             
                 genStrm = AS.concat $ 
-                    Proc.thruExeChunks_ 
+                    Proc.transformChunks 
                     trBinary 
                     ["[a-z]", "[A-Z]"] 
                     (AS.arraysOf arrayChunkElem inputStream)
@@ -195,7 +195,7 @@ thruExeChunks_ =
 main :: IO ()
 main = hspec $ do
     describe "test for process functions" $ do
-        prop "fromExe cat = toBytes" fromExe
-        prop "fromExeChunks cat = toChunks" fromExeChunks
-        prop "thruExe_ tr = map toUpper " thruExe_
-        prop "AS.concat $ thruExeChunks_ tr = map toUpper " thruExeChunks_
+        prop "Proc.toBytes cat = FH.toBytes" toBytes
+        prop "Proc.toChunks cat = FH.toChunks" toChunks
+        prop "transformBytes tr = map toUpper " transformBytes
+        prop "AS.concat $ transformChunks tr = map toUpper " transformChunks
