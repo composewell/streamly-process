@@ -1,0 +1,8 @@
+resolver: lts-14.25
+packages:
+- '.'
+
+extra-deps:
+    - fusion-plugin-types-0.1.0
+    - git: https://github.com/composewell/streamly.git
+      commit: 6bf8b4abd96816dfd5a446de88f125e2c015f9b6
