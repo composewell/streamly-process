@@ -79,25 +79,25 @@ deleteFiles =
 runCatCmd :: IORef Handle -> IO ()
 runCatCmd ioRefHandle = do
     hdl <- readIORef ioRefHandle
-    FH.fromBytes hdl $ Proc.fromExe catBinary [largeByteFile]
+    FH.fromBytes hdl $ Proc.toBytes catBinary [largeByteFile]
 
 runCatCmdChunk :: IORef Handle -> IO ()
 runCatCmdChunk ioRefHandle = do
     hdl <- readIORef ioRefHandle
     FH.fromChunks hdl $ 
-        Proc.fromExeChunks catBinary [largeByteFile]
+        Proc.toChunks catBinary [largeByteFile]
 
 runTrCmd :: IORef (Handle, Handle) -> IO ()
 runTrCmd ioRefHandles = do
     (inputHdl, outputHdl) <- readIORef ioRefHandles
     FH.fromBytes outputHdl $ 
-        Proc.thruExe_ trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
+        Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
 
 runTrCmdChunk :: IORef (Handle, Handle) -> IO ()
 runTrCmdChunk ioRefHandles = do
     (inputHdl, outputHdl) <- readIORef ioRefHandles
     FH.fromChunks outputHdl $ 
-        Proc.thruExeChunks_ trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
+        Proc.transformChunks trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
 
 benchWithOut :: (IORef Handle -> IO ()) -> Benchmarkable
 benchWithOut func = perRunEnvWithCleanup envIO closeHandle func

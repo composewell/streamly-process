@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Streamly.System.Process
-    ( fromExe
-    , fromExeChunks
-    , thruExe_
-    , thruExeChunks_
+    ( toBytes
+    , toChunks
+    , transformBytes
+    , transformChunks
     )
 where
 
@@ -184,13 +184,13 @@ withInpExe fpath args input genStrm = S.bracket pre post body
 -- reason
 --
 -- @since 0.1.0.0
-{-# INLINE fromExe #-}
-fromExe ::  
+{-# INLINE toBytes #-}
+toBytes ::  
     (IsStream t, MonadIO m, MonadCatch m)
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
     -> t m Word8    -- ^ Output Stream
-fromExe fpath args = AS.concat $ withExe fpath args FH.toChunks
+toBytes fpath args = AS.concat $ withExe fpath args FH.toChunks
 
 -- |
 -- Runs a process specified by the path to executable and arguments
@@ -201,12 +201,12 @@ fromExe fpath args = AS.concat $ withExe fpath args FH.toChunks
 -- reason
 --
 -- @since 0.1.0.0
-fromExeChunks ::    
+toChunks ::    
     (IsStream t, MonadIO m, MonadCatch m)
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
     -> t m (Array Word8)    -- ^ Output Stream
-fromExeChunks fpath args = withExe fpath args FH.toChunks
+toChunks fpath args = withExe fpath args FH.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
@@ -219,14 +219,14 @@ fromExeChunks fpath args = withExe fpath args FH.toChunks
 -- reason
 --
 -- @since 0.1.0.0
-{-# INLINE thruExe_ #-}
-thruExe_ :: 
+{-# INLINE transformBytes #-}
+transformBytes :: 
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
     -> t m Word8    -- ^ Input Stream
     -> t m Word8    -- ^ Output Stream
-thruExe_ fpath args inStream = 
+transformBytes fpath args inStream = 
     AS.concat $ withInpExe fpath args inStream FH.toChunks
 
 -- |
@@ -240,12 +240,12 @@ thruExe_ fpath args inStream =
 -- reason
 --
 -- @since 0.1.0.0
-{-# INLINE thruExeChunks_ #-}
-thruExeChunks_ :: 
+{-# INLINE transformChunks #-}
+transformChunks :: 
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
     -> t m (Array Word8)    -- ^ Input Stream
     -> t m (Array Word8)    -- ^ Output Stream
-thruExeChunks_ fpath args inStream = 
+transformChunks fpath args inStream = 
     withInpExe fpath args (AS.concat inStream) FH.toChunks
