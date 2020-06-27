@@ -33,6 +33,7 @@ library
   hs-source-dirs: src
   build-depends:
       streamly
+    , primitive         < 0.7.1
     , base              >= 4.8   && < 5
     , process           >= 1.0   && < 1.7
     , transformers      >= 0.4 && < 0.6
