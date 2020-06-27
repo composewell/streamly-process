@@ -1,3 +1,6 @@
 resolver: lts-14.25
 packages:
 - '.'
+extra-deps:
+    git: https://github.com/composewell/streamly
+    commit: 6bf8b4abd96816dfd5a446de88f125e2c015f9b6
