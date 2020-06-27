@@ -41,18 +41,6 @@ _A = 65
 _Z :: Word8
 _Z = 90
 
-devRandom :: String
-devRandom = "/dev/random"
-
-devNull :: String
-devNull = "/dev/null"
-
-ddBinary :: String
-ddBinary = "/bin/dd"
-
-ddBlockSize :: Int
-ddBlockSize = 1024
-
 catBinary :: String
 catBinary = "/bin/cat"
 
@@ -98,23 +86,8 @@ listEquals eq process_output list = do
              )
     assert (process_output `eq` list)
 
-byteFile :: String
-byteFile = "./byteFile"
-
 charFile :: String
 charFile = "./largeCharFile"
-
-generateByteFile :: Int -> IO ()
-generateByteFile blockCount = do
-    let procObj = proc ddBinary [
-                "if=" ++ devRandom,
-                "of=" ++ byteFile,
-                "count=" ++ show blockCount,
-                "bs=" ++ show ddBlockSize
-            ]
-    (_, _, _, procHandle) <- createProcess procObj
-    waitForProcess procHandle
-    return ()
 
 generateCharFile :: Int -> IO ()
 generateCharFile numCharInCharFile = do
@@ -127,18 +100,18 @@ toBytes =
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->        
         monadicIO $ do
             let
-                genStrm = Proc.toBytes catBinary [byteFile]
+                genStrm = Proc.toBytes catBinary [charFile]
 
                 ioByteStrm = do
-                    handle <- openFile byteFile ReadMode
+                    handle <- openFile charFile ReadMode
                     let strm = FH.toBytes handle
                     return $ S.finally (hClose handle) strm
 
-            run $ generateByteFile numBlock
+            run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
             genList <- run $ S.toList genStrm
             byteList <- run $ S.toList byteStrm
-            run $ removeFile byteFile
+            run $ removeFile charFile
             listEquals (==) genList byteList
 
 toChunks :: Property
@@ -146,18 +119,18 @@ toChunks =
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
         monadicIO $ do
             let
-                genStrm = Proc.toChunks catBinary [byteFile]
+                genStrm = Proc.toChunks catBinary [charFile]
                 
                 ioByteStrm = do
-                    handle <- openFile byteFile ReadMode
+                    handle <- openFile charFile ReadMode
                     let strm = FH.toBytes handle
                     return $ S.finally (hClose handle) strm
 
-            run $ generateByteFile numBlock
+            run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
             genList <- run $ S.toList (AS.concat genStrm)
             byteList <- run $ S.toList byteStrm
-            run $ removeFile byteFile
+            run $ removeFile charFile
             listEquals (==) genList byteList
 
 transformBytes :: Property
