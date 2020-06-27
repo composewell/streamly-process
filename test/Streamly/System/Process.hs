@@ -5,9 +5,9 @@ import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.FileSystem.Handle as FH
 import qualified Streamly.Internal.Memory.ArrayStream as AS
 
-import System.IO (Handle, IOMode(..), openFile, hClose)
+import System.IO (FilePath, Handle, IOMode(..), openFile, hClose)
 import System.Process (proc, createProcess, waitForProcess)
-import System.Directory (removeFile)
+import System.Directory (removeFile, findExecutable)
 
 import Test.Hspec(hspec, describe)
 import Test.Hspec.QuickCheck
@@ -41,23 +41,19 @@ _A = 65
 _Z :: Word8
 _Z = 90
 
-devRandom :: String
-devRandom = "/dev/random"
+ioCatBinary :: IO FilePath
+ioCatBinary = do
+    maybeDdBinary <- findExecutable "cat"
+    case maybeDdBinary of
+        Just ddBinary -> return ddBinary
+        _ -> error "cat Binary Not Found"
 
-devNull :: String
-devNull = "/dev/null"
-
-ddBinary :: String
-ddBinary = "/bin/dd"
-
-ddBlockSize :: Int
-ddBlockSize = 1024
-
-catBinary :: String
-catBinary = "/bin/cat"
-
-trBinary :: String
-trBinary = "/usr/bin/tr"
+ioTrBinary :: IO FilePath
+ioTrBinary = do
+    maybeDdBinary <- findExecutable "tr"
+    case maybeDdBinary of
+        Just ddBinary -> return ddBinary
+        _ -> error "tr Binary Not Found"
 
 minBlockCount :: Int
 minBlockCount = 1
@@ -98,23 +94,8 @@ listEquals eq process_output list = do
              )
     assert (process_output `eq` list)
 
-byteFile :: String
-byteFile = "./byteFile"
-
 charFile :: String
 charFile = "./largeCharFile"
-
-generateByteFile :: Int -> IO ()
-generateByteFile blockCount = do
-    let procObj = proc ddBinary [
-                "if=" ++ devRandom,
-                "of=" ++ byteFile,
-                "count=" ++ show blockCount,
-                "bs=" ++ show ddBlockSize
-            ]
-    (_, _, _, procHandle) <- createProcess procObj
-    waitForProcess procHandle
-    return ()
 
 generateCharFile :: Int -> IO ()
 generateCharFile numCharInCharFile = do
@@ -126,44 +107,47 @@ toBytes :: Property
 toBytes = 
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->        
         monadicIO $ do
+            catBinary <- run ioCatBinary
             let
-                genStrm = Proc.toBytes catBinary [byteFile]
+                genStrm = Proc.toBytes catBinary [charFile]
 
                 ioByteStrm = do
-                    handle <- openFile byteFile ReadMode
+                    handle <- openFile charFile ReadMode
                     let strm = FH.toBytes handle
                     return $ S.finally (hClose handle) strm
 
-            run $ generateByteFile numBlock
+            run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
             genList <- run $ S.toList genStrm
             byteList <- run $ S.toList byteStrm
-            run $ removeFile byteFile
+            run $ removeFile charFile
             listEquals (==) genList byteList
 
 toChunks :: Property
 toChunks = 
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
         monadicIO $ do
+            catBinary <- run ioCatBinary
             let
-                genStrm = Proc.toChunks catBinary [byteFile]
+                genStrm = Proc.toChunks catBinary [charFile]
                 
                 ioByteStrm = do
-                    handle <- openFile byteFile ReadMode
+                    handle <- openFile charFile ReadMode
                     let strm = FH.toBytes handle
                     return $ S.finally (hClose handle) strm
 
-            run $ generateByteFile numBlock
+            run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
             genList <- run $ S.toList (AS.concat genStrm)
             byteList <- run $ S.toList byteStrm
-            run $ removeFile byteFile
+            run $ removeFile charFile
             listEquals (==) genList byteList
 
 transformBytes :: Property
 transformBytes = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
+            trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
                 genStrm = Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] inputStream
@@ -177,6 +161,7 @@ transformChunks :: Property
 transformChunks = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
+            trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
             
