@@ -5,9 +5,9 @@ import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.FileSystem.Handle as FH
 import qualified Streamly.Internal.Memory.ArrayStream as AS
 
-import System.IO (Handle, IOMode(..), openFile, hClose)
+import System.IO (FilePath, Handle, IOMode(..), openFile, hClose)
 import System.Process (proc, createProcess, waitForProcess)
-import System.Directory (removeFile)
+import System.Directory (removeFile, findExecutable)
 
 import Test.Hspec(hspec, describe)
 import Test.Hspec.QuickCheck
@@ -41,11 +41,19 @@ _A = 65
 _Z :: Word8
 _Z = 90
 
-catBinary :: String
-catBinary = "/bin/cat"
+ioCatBinary :: IO FilePath
+ioCatBinary = do
+    maybeDdBinary <- findExecutable "cat"
+    case maybeDdBinary of
+        Just ddBinary -> return ddBinary
+        _ -> error "cat Binary Not Found"
 
-trBinary :: String
-trBinary = "/usr/bin/tr"
+ioTrBinary :: IO FilePath
+ioTrBinary = do
+    maybeDdBinary <- findExecutable "tr"
+    case maybeDdBinary of
+        Just ddBinary -> return ddBinary
+        _ -> error "tr Binary Not Found"
 
 minBlockCount :: Int
 minBlockCount = 1
@@ -99,6 +107,7 @@ toBytes :: Property
 toBytes = 
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->        
         monadicIO $ do
+            catBinary <- run ioCatBinary
             let
                 genStrm = Proc.toBytes catBinary [charFile]
 
@@ -118,6 +127,7 @@ toChunks :: Property
 toChunks = 
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
         monadicIO $ do
+            catBinary <- run ioCatBinary
             let
                 genStrm = Proc.toChunks catBinary [charFile]
                 
@@ -137,6 +147,7 @@ transformBytes :: Property
 transformBytes = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
+            trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
                 genStrm = Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] inputStream
@@ -150,6 +161,7 @@ transformChunks :: Property
 transformChunks = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
+            trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
             
