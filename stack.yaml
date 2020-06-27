@@ -3,5 +3,5 @@ packages:
 - '.'
 
 extra-deps:
-    git: https://github.com/composewell/streamly.git
-    commit: 6bf8b4abd96816dfd5a446de88f125e2c015f9b6
+    - git: https://github.com/composewell/streamly.git
+      commit: 6bf8b4abd96816dfd5a446de88f125e2c015f9b6
