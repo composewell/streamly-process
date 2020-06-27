@@ -4,9 +4,9 @@ import qualified Streamly.Internal.Prelude as S
 import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.FileSystem.Handle as FH
 
-import System.IO (Handle, IOMode(..), openFile, hClose)
+import System.IO (FilePath, Handle, IOMode(..), openFile, hClose)
 import System.Process (proc, createProcess, waitForProcess)
-import System.Directory (removeFile)
+import System.Directory (removeFile, findExecutable)
 
 import Control.Monad (replicateM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -25,8 +25,12 @@ devRandom = "/dev/random"
 devNull :: String
 devNull = "/dev/null"
 
-ddBinary :: String
-ddBinary = "/bin/dd"
+ioDdBinary :: IO FilePath
+ioDdBinary = do
+    maybeDdBinary <- findExecutable "dd"
+    case maybeDdBinary of
+        Just ddBinary -> return ddBinary
+        _ -> error "dd Binary Not Found"
 
 ddBlockSize :: Int
 ddBlockSize = 1024
@@ -37,11 +41,19 @@ ddBlockCount = 100              -- ~100 KB
 numCharInCharFile :: Int
 numCharInCharFile = 100 * 1024  -- ~100 KB
 
-catBinary :: String
-catBinary = "/bin/cat"
+ioCatBinary :: IO FilePath
+ioCatBinary = do
+    maybeDdBinary <- findExecutable "cat"
+    case maybeDdBinary of
+        Just ddBinary -> return ddBinary
+        _ -> error "cat Binary Not Found"
 
-trBinary :: String
-trBinary = "/usr/bin/tr"
+ioTrBinary :: IO FilePath
+ioTrBinary = do
+    maybeDdBinary <- findExecutable "tr"
+    case maybeDdBinary of
+        Just ddBinary -> return ddBinary
+        _ -> error "tr Binary Not Found"
 
 largeByteFile :: String
 largeByteFile = "./largeByteFile"
@@ -52,6 +64,7 @@ largeCharFile = "./largeCharFile"
 generateByteFile :: IO ()
 generateByteFile = 
     do
+        ddBinary <- ioDdBinary
         let procObj = proc ddBinary [
                     "if=" ++ devRandom,
                     "of=" ++ largeByteFile,
@@ -79,23 +92,27 @@ deleteFiles =
 runCatCmd :: IORef Handle -> IO ()
 runCatCmd ioRefHandle = do
     hdl <- readIORef ioRefHandle
+    catBinary <- ioCatBinary
     FH.fromBytes hdl $ Proc.toBytes catBinary [largeByteFile]
 
 runCatCmdChunk :: IORef Handle -> IO ()
 runCatCmdChunk ioRefHandle = do
     hdl <- readIORef ioRefHandle
+    catBinary <- ioCatBinary
     FH.fromChunks hdl $ 
         Proc.toChunks catBinary [largeByteFile]
 
 runTrCmd :: IORef (Handle, Handle) -> IO ()
 runTrCmd ioRefHandles = do
     (inputHdl, outputHdl) <- readIORef ioRefHandles
+    trBinary <- ioTrBinary
     FH.fromBytes outputHdl $ 
         Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
 
 runTrCmdChunk :: IORef (Handle, Handle) -> IO ()
 runTrCmdChunk ioRefHandles = do
     (inputHdl, outputHdl) <- readIORef ioRefHandles
+    trBinary <- ioTrBinary
     FH.fromChunks outputHdl $ 
         Proc.transformChunks trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
 
