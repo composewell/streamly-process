@@ -146,12 +146,12 @@ matrix:
   #- env: BUILD=stack RESOLVER=nightly
   #  addons: {apt: {packages: [cabal-install-1.24], sources: [hvr-ghc]}}
 
-  - env: BUILD=stack RESOLVER=lts-14.25 GHCVER=8.6"
+  - env: BUILD=stack RESOLVER=lts-14.25 GHCVER=8.6
     addons: {apt: {packages: [cabal-install-2.4], sources: [hvr-ghc]}}
     os: linux
     arch: amd64
 
-  - env: BUILD=stack RESOLVER=lts-14.25 GHCVER=8.6"
+  - env: BUILD=stack RESOLVER=lts-14.25 GHCVER=8.6
     addons: {apt: {packages: [cabal-install-2.4], sources: [hvr-ghc]}}
     os: linux
     arch: x86
