@@ -58,7 +58,6 @@ benchmark process-bench
     , transformers      >= 0.4   && < 0.6
     , directory         >= 1.2.2 && < 1.4
     , gauge             >= 0.2.4 && < 0.3
-    , deepseq           >= 1.4.2
 
   default-language: Haskell2010
 
