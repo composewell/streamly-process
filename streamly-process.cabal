@@ -18,7 +18,14 @@ maintainer:          streamly@composewell.com
 copyright:           Composewell Technologies
 category:            Control, Concurrency, Streaming, Processes
 build-type:          Simple
-extra-source-files:  CHANGELOG.md, README.md
+extra-source-files: 
+    .gitignore
+    .travis.yml
+    appveyor.yml
+    cabal.project
+    CHANGELOG.md
+    README.md
+    design/proposal.md
 
 library
   ghc-options: -Wall
