@@ -181,6 +181,6 @@ main :: IO ()
 main = hspec $ do
     describe "test for process functions" $ do
         -- prop "Proc.toBytes cat = FH.toBytes" toBytes
-        prop "Proc.toChunks cat = FH.toChunks" toChunks
-        -- prop "transformBytes tr = map toUpper " transformBytes
+        -- prop "Proc.toChunks cat = FH.toChunks" toChunks
+        prop "transformBytes tr = map toUpper " transformBytes
         -- prop "AS.concat $ transformChunks tr = map toUpper " transformChunks
