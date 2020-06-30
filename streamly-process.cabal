@@ -20,7 +20,7 @@ category:            Control, Concurrency, Streaming, Processes
 build-type:          Simple
 extra-source-files: 
     .gitignore
-    .travis.yml
+    -- .travis.yml
     appveyor.yml
     cabal.project
     stack.yaml
