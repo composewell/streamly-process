@@ -228,6 +228,27 @@ thruExe1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
+thruExe2 :: Property
+thruExe2 = 
+    forAll (listOf (choose(_a, _z))) $ \ls ->
+        monadicIO $ do
+            streamIoRef <- run $ newIORef S.nil
+            let
+                inputStream = S.fromList ls
+                _ = 
+                    Proc.thruExe
+                    executableFile
+                    ["[a-z]", "[A-Z]"]
+                    (writeToIoRefFold streamIoRef)
+                    inputStream
+
+                charUpperStrm = S.map toUpper inputStream
+
+            genStrm <- run $ readIORef streamIoRef
+            genList <- run $ S.toList genStrm
+            charList <- run $ S.toList charUpperStrm
+            listEquals (==) genList charList
+
 thruExeChunks1 :: Property
 thruExeChunks1 = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
@@ -258,5 +279,6 @@ main = do
             prop "transformBytes tr = map toUpper " transformBytes
             prop "AS.concat $ transformChunks tr = map toUpper " transformChunks
             prop "thruExe tr = map toUpper " thruExe1
+            prop "error stream of thruExe tr = map toUpper " thruExe2
             prop "AS.concat $ thruExeChunks tr = map toUpper " thruExeChunks1
     removeFile executableFile
