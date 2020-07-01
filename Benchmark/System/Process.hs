@@ -89,25 +89,25 @@ deleteFiles :: IO ()
 deleteFiles = 
     removeFile largeByteFile >> removeFile largeCharFile
 
-runCatCmd :: Handle -> IO ()
-runCatCmd hdl = do
+toBytes :: Handle -> IO ()
+toBytes hdl = do
     catBinary <- ioCatBinary
     FH.fromBytes hdl $ Proc.toBytes catBinary [largeByteFile]
 
-runCatCmdChunk :: Handle -> IO ()
-runCatCmdChunk hdl = do
+toChunks :: Handle -> IO ()
+toChunks hdl = do
     catBinary <- ioCatBinary
     FH.fromChunks hdl $ 
         Proc.toChunks catBinary [largeByteFile]
 
-runTrCmd :: (Handle, Handle) -> IO ()
-runTrCmd (inputHdl, outputHdl) = do
+transformBytes :: (Handle, Handle) -> IO ()
+transformBytes (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromBytes outputHdl $ 
         Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
 
-runTrCmdChunk :: (Handle, Handle) -> IO ()
-runTrCmdChunk (inputHdl, outputHdl) = do
+transformChunks :: (Handle, Handle) -> IO ()
+transformChunks (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromChunks outputHdl $ 
         Proc.transformChunks trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
@@ -153,13 +153,13 @@ main = do
     ioRefInpOut <- newIORef (tempHandleRead, tempHandleWrite)
     defaultMain [
             bench "exe - word8" $ 
-                benchWithOut ioRefOut runCatCmd,
+                benchWithOut ioRefOut toBytes,
             bench "exe - array of word8" $
-                benchWithOut ioRefOut runCatCmdChunk,
+                benchWithOut ioRefOut toChunks,
             bench "exe - word8 to word8" $ 
-                benchWithInpOut ioRefInpOut runTrCmd,
+                benchWithInpOut ioRefInpOut transformBytes,
             bench "exe - array of word8 to array of word8" $
-                benchWithInpOut ioRefInpOut runTrCmdChunk
+                benchWithInpOut ioRefInpOut transformChunks
         ]
     handleOut1 <- readIORef ioRefOut
     hClose handleOut1
