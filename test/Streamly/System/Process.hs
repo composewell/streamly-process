@@ -3,10 +3,13 @@ module Main where
 import qualified Streamly.Internal.Prelude as S
 import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.FileSystem.Handle as FH
+import qualified Streamly.Internal.Data.Fold as FL
 import qualified Streamly.Internal.Memory.ArrayStream as AS
+import Streamly.Internal.Data.Stream.StreamK.Type (IsStream)
+import Streamly.Internal.Data.Fold (Fold)
 
-import System.IO (FilePath, Handle, IOMode(..), openFile, hClose)
-import System.Process (proc, createProcess, waitForProcess)
+import System.IO (FilePath, Handle, IOMode(..), openFile, hClose, writeFile)
+import System.Process (proc, createProcess, waitForProcess, callCommand)
 import System.Directory (removeFile, findExecutable)
 
 import Test.Hspec(hspec, describe)
@@ -26,6 +29,7 @@ import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad (when)
 
+import Data.IORef (IORef (..), newIORef, readIORef, writeIORef)
 import Data.List ((\\))
 import Data.Word (Word8)
 
@@ -70,6 +74,18 @@ maxNumChar = 100 * 1024
 arrayChunkElem :: Int
 arrayChunkElem = 100
 
+executableFile :: String
+executableFile = "./writeTrToError.sh"
+
+executableFileContent :: String
+executableFileContent = 
+    "tr [a-z] [A-Z] <&0 >&2"
+
+createExecutable :: IO ()
+createExecutable = do
+    writeFile executableFile executableFileContent
+    callCommand ("chmod +x " ++ executableFile)
+
 toUpper :: Word8 -> Word8
 toUpper char =
     if(_a <= char && char <= _z)
@@ -102,6 +118,27 @@ generateCharFile numCharInCharFile = do
     handle <- openFile charFile WriteMode
     FH.fromBytes handle (S.replicate numCharInCharFile _a)
     hClose handle
+
+writeToIoRefFold :: 
+    (IsStream t, MonadIO m)
+    => IORef (t m Word8)
+    -> Fold m Word8 ()
+writeToIoRefFold ioRef = FL.Fold step initial extract
+
+    where
+    
+    step _ newEle = do
+        stream <- liftIO $ readIORef ioRef
+        let newStream = S.cons newEle stream
+        liftIO $ writeIORef ioRef newStream
+        return ()
+
+    initial = liftIO $ writeIORef ioRef S.nil
+
+    extract _ = do
+        stream <- liftIO $ readIORef ioRef
+        let reverseStream = S.reverse stream
+        liftIO $ writeIORef ioRef reverseStream 
 
 toBytes :: Property
 toBytes = 
@@ -177,10 +214,95 @@ transformChunks =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
+thruExe1 :: Property
+thruExe1 = 
+    forAll (listOf (choose(_a, _z))) $ \ls ->
+        monadicIO $ do
+            trBinary <- run ioTrBinary
+            let
+                inputStream = S.fromList ls
+                genStrm = Proc.thruExe trBinary ["[a-z]", "[A-Z]"] FL.drain inputStream
+                charUpperStrm = S.map toUpper inputStream
+
+            genList <- run $ S.toList genStrm
+            charList <- run $ S.toList charUpperStrm
+            listEquals (==) genList charList
+
+thruExe2 :: Property
+thruExe2 = 
+    forAll (listOf (choose(_a, _z))) $ \ls ->
+        monadicIO $ do
+            streamIoRef <- run $ newIORef S.nil
+            let
+                inputStream = S.fromList ls
+                outStream = 
+                    Proc.thruExe
+                    executableFile
+                    ["[a-z]", "[A-Z]"]
+                    (writeToIoRefFold streamIoRef)
+                    inputStream
+
+                charUpperStrm = S.map toUpper inputStream
+
+            run $ S.drain outStream
+            genStrm <- run $ readIORef streamIoRef
+            genList <- run $ S.toList genStrm
+            charList <- run $ S.toList charUpperStrm
+            listEquals (==) genList charList
+
+thruExeChunks1 :: Property
+thruExeChunks1 = 
+    forAll (listOf (choose(_a, _z))) $ \ls ->
+        monadicIO $ do
+            trBinary <- run ioTrBinary
+            let
+                inputStream = S.fromList ls
+            
+                genStrm = AS.concat $ 
+                    Proc.transformChunks 
+                    trBinary 
+                    ["[a-z]", "[A-Z]"] 
+                    (AS.arraysOf arrayChunkElem inputStream)
+                
+                charUpperStrm = S.map toUpper inputStream
+
+            genList <- run $ S.toList genStrm
+            charList <- run $ S.toList charUpperStrm
+            listEquals (==) genList charList
+
+thruExeChunks2 :: Property
+thruExeChunks2 = 
+    forAll (listOf (choose(_a, _z))) $ \ls ->
+        monadicIO $ do
+            streamIoRef <- run $ newIORef S.nil
+            let
+                inputStream = S.fromList ls
+                outStream = 
+                    Proc.thruExeChunks
+                    executableFile
+                    ["[a-z]", "[A-Z]"]
+                    (writeToIoRefFold streamIoRef)
+                    (AS.arraysOf arrayChunkElem inputStream)
+
+                charUpperStrm = S.map toUpper inputStream
+
+            run $ S.drain outStream
+            genStrm <- run $ readIORef streamIoRef
+            genList <- run $ S.toList genStrm
+            charList <- run $ S.toList charUpperStrm
+            listEquals (==) genList charList
+
 main :: IO ()
-main = hspec $ do
-    describe "test for process functions" $ do
-        prop "Proc.toBytes cat = FH.toBytes" toBytes
-        prop "Proc.toChunks cat = FH.toChunks" toChunks
-        prop "transformBytes tr = map toUpper " transformBytes
-        prop "AS.concat $ transformChunks tr = map toUpper " transformChunks
+main = do
+    createExecutable
+    hspec $ do
+        describe "test for process functions" $ do
+            prop "Proc.toBytes cat = FH.toBytes" toBytes
+            prop "Proc.toChunks cat = FH.toChunks" toChunks
+            prop "transformBytes tr = map toUpper " transformBytes
+            prop "AS.concat $ transformChunks tr = map toUpper " transformChunks
+            prop "thruExe tr = map toUpper " thruExe1
+            prop "error stream of thruExe tr = map toUpper " thruExe2
+            prop "AS.concat $ thruExeChunks tr = map toUpper " thruExeChunks1
+            prop "error stream of thruExeChunks tr = map toUpper " thruExeChunks2
+    removeFile executableFile

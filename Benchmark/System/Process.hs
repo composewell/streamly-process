@@ -3,9 +3,18 @@ module Main where
 import qualified Streamly.Internal.Prelude as S
 import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.FileSystem.Handle as FH
+import qualified Streamly.Internal.Data.Fold as FL
 
-import System.IO (FilePath, Handle, IOMode(..), openFile, hClose, stdout)
-import System.Process (proc, createProcess, waitForProcess)
+import System.IO
+    ( FilePath
+    , Handle
+    , IOMode(..)
+    , openFile
+    , hClose
+    , stdout
+    , writeFile
+    )
+import System.Process (proc, createProcess, waitForProcess, callCommand)
 import System.Directory (removeFile, findExecutable)
 
 import Control.Monad (replicateM_)
@@ -61,6 +70,18 @@ largeByteFile = "./largeByteFile"
 largeCharFile :: String
 largeCharFile = "./largeCharFile"
 
+executableFile :: String
+executableFile = "./writeTrToError.sh"
+
+executableFileContent :: String
+executableFileContent = 
+    "tr [a-z] [A-Z] <&0 >&2"
+
+createExecutable :: IO ()
+createExecutable = do
+    writeFile executableFile executableFileContent
+    callCommand ("chmod +x " ++ executableFile)
+
 generateByteFile :: IO ()
 generateByteFile = 
     do
@@ -83,34 +104,62 @@ generateCharFile = do
     hClose handle
 
 generateFiles :: IO ()
-generateFiles = generateByteFile >> generateCharFile
+generateFiles = do
+    createExecutable
+    generateByteFile
+    generateCharFile
 
 deleteFiles :: IO ()
-deleteFiles = 
-    removeFile largeByteFile >> removeFile largeCharFile
+deleteFiles = do
+    removeFile executableFile
+    removeFile largeByteFile
+    removeFile largeCharFile
 
-runCatCmd :: Handle -> IO ()
-runCatCmd hdl = do
+toBytes :: Handle -> IO ()
+toBytes hdl = do
     catBinary <- ioCatBinary
     FH.fromBytes hdl $ Proc.toBytes catBinary [largeByteFile]
 
-runCatCmdChunk :: Handle -> IO ()
-runCatCmdChunk hdl = do
+toChunks :: Handle -> IO ()
+toChunks hdl = do
     catBinary <- ioCatBinary
     FH.fromChunks hdl $ 
         Proc.toChunks catBinary [largeByteFile]
 
-runTrCmd :: (Handle, Handle) -> IO ()
-runTrCmd (inputHdl, outputHdl) = do
+transformBytes :: (Handle, Handle) -> IO ()
+transformBytes (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromBytes outputHdl $ 
         Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
 
-runTrCmdChunk :: (Handle, Handle) -> IO ()
-runTrCmdChunk (inputHdl, outputHdl) = do
+transformChunks :: (Handle, Handle) -> IO ()
+transformChunks (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromChunks outputHdl $ 
         Proc.transformChunks trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
+
+thruExe1 :: (Handle, Handle) -> IO ()
+thruExe1 (inputHdl, outputHdl) = do
+    trBinary <- ioTrBinary
+    FH.fromBytes outputHdl $ 
+        Proc.thruExe trBinary ["[a-z]", "[A-Z]"] FL.drain (FH.toBytes inputHdl)
+
+thruExe2 :: (Handle, Handle) -> IO ()
+thruExe2 (inputHdl, outputHdl) =
+    FH.fromBytes outputHdl $ 
+        Proc.thruExe executableFile ["[a-z]", "[A-Z]"] FL.drain (FH.toBytes inputHdl)
+
+thruExeChunks1 :: (Handle, Handle) -> IO ()
+thruExeChunks1 (inputHdl, outputHdl) = do
+    trBinary <- ioTrBinary
+    FH.fromChunks outputHdl $ 
+        Proc.thruExeChunks trBinary ["[a-z]", "[A-Z]"] FL.drain (FH.toChunks inputHdl)
+
+thruExeChunks2 :: (Handle, Handle) -> IO ()
+thruExeChunks2 (inputHdl, outputHdl) = do
+    trBinary <- ioTrBinary
+    FH.fromChunks outputHdl $ 
+        Proc.thruExeChunks executableFile ["[a-z]", "[A-Z]"] FL.drain (FH.toChunks inputHdl)
 
 benchWithOut :: IORef Handle -> (Handle -> IO ()) -> Benchmarkable
 benchWithOut nullFileIoRef func = perRunEnv openNewHandle benchCode
@@ -153,13 +202,21 @@ main = do
     ioRefInpOut <- newIORef (tempHandleRead, tempHandleWrite)
     defaultMain [
             bench "exe - word8" $ 
-                benchWithOut ioRefOut runCatCmd,
+                benchWithOut ioRefOut toBytes,
             bench "exe - array of word8" $
-                benchWithOut ioRefOut runCatCmdChunk,
+                benchWithOut ioRefOut toChunks,
             bench "exe - word8 to word8" $ 
-                benchWithInpOut ioRefInpOut runTrCmd,
+                benchWithInpOut ioRefInpOut transformBytes,
             bench "exe - array of word8 to array of word8" $
-                benchWithInpOut ioRefInpOut runTrCmdChunk
+                benchWithInpOut ioRefInpOut transformChunks,
+            bench "exe - word8 to word8 - drain error" $ 
+                benchWithInpOut ioRefInpOut thruExe1,
+            bench "exe - word8 to standard error - drain error" $ 
+                benchWithInpOut ioRefInpOut thruExe2,
+            bench "exe - array of word8 to array of word8 - drain error" $
+                benchWithInpOut ioRefInpOut thruExeChunks1,
+            bench "exe - array of word8 to standard error - drain error" $ 
+                benchWithInpOut ioRefInpOut thruExeChunks2
         ]
     handleOut1 <- readIORef ioRefOut
     hClose handleOut1
