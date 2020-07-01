@@ -133,7 +133,7 @@ writeToIoRefFold ioRef = FL.Fold step initial extract
         liftIO $ writeIORef ioRef newStream
         return ()
 
-    initial = return ()
+    initial = liftIO $ writeIORef ioRef S.nil
 
     extract _ = do
         stream <- liftIO $ readIORef ioRef
