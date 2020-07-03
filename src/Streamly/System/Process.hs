@@ -35,6 +35,7 @@ import Data.Word (Word8)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Exception (Exception, displayException)
+import Control.Concurrent (killThread)
 
 -- | 
 -- ProcessFailed exception which would be raised when process which
@@ -167,16 +168,22 @@ withInpExe fpath args input genStrm = S.bracket pre post body
 
     where
         
-    writeAction writeHdl = 
-        FH.fromBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
+    writeAction writeHdl = do
+        FH.fromBytes writeHdl (adapt input)
+        liftIO $ hClose writeHdl
 
-    pre = liftIO $ openProcInp fpath args
+    pre = do
+        (writeHdl, readHdl, procHandle) <- liftIO $ openProcInp fpath args
+        writeThreadId <- fork $ writeAction writeHdl
+        return (writeThreadId, writeHdl, readHdl, procHandle)
 
-    post (_, readHdl, procHandle) = 
-        liftIO $ hClose readHdl >> exceptOnError procHandle
+    post (writeThreadId, writeHdl, readHdl, procHandle) = do
+        liftIO $ killThread writeThreadId
+        liftIO $ hClose writeHdl
+        liftIO $ hClose readHdl
+        exceptOnError procHandle
     
-    body (writeHdl, readHdl, _) = 
-        S.before (fork $ writeAction writeHdl) $ genStrm readHdl
+    body (_, _, readHdl, _) = genStrm readHdl
 
 -- | 
 -- Creates a process using the path to executable and arguments, then

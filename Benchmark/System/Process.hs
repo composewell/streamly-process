@@ -201,22 +201,22 @@ main = do
     ioRefOut <- newIORef tempHandleWrite
     ioRefInpOut <- newIORef (tempHandleRead, tempHandleWrite)
     defaultMain [
-            bench "exe - word8" $ 
-                benchWithOut ioRefOut toBytes,
-            bench "exe - array of word8" $
-                benchWithOut ioRefOut toChunks,
+            -- bench "exe - word8" $ 
+            --     benchWithOut ioRefOut toBytes,
+            -- bench "exe - array of word8" $
+            --     benchWithOut ioRefOut toChunks,
             bench "exe - word8 to word8" $ 
                 benchWithInpOut ioRefInpOut transformBytes,
             bench "exe - array of word8 to array of word8" $
-                benchWithInpOut ioRefInpOut transformChunks,
-            bench "exe - word8 to word8 - drain error" $ 
-                benchWithInpOut ioRefInpOut thruExe1,
-            bench "exe - word8 to standard error - drain error" $ 
-                benchWithInpOut ioRefInpOut thruExe2,
-            bench "exe - array of word8 to array of word8 - drain error" $
-                benchWithInpOut ioRefInpOut thruExeChunks1,
-            bench "exe - array of word8 to standard error - drain error" $ 
-                benchWithInpOut ioRefInpOut thruExeChunks2
+                benchWithInpOut ioRefInpOut transformChunks
+            -- bench "exe - word8 to word8 - drain error" $ 
+            --     benchWithInpOut ioRefInpOut thruExe1,
+            -- bench "exe - word8 to standard error - drain error" $ 
+            --     benchWithInpOut ioRefInpOut thruExe2,
+            -- bench "exe - array of word8 to array of word8 - drain error" $
+            --     benchWithInpOut ioRefInpOut thruExeChunks1,
+            -- bench "exe - array of word8 to standard error - drain error" $ 
+            --     benchWithInpOut ioRefInpOut thruExeChunks2
         ]
     handleOut1 <- readIORef ioRefOut
     hClose handleOut1

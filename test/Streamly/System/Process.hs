@@ -307,8 +307,8 @@ main = do
             prop "Proc.toChunks cat = FH.toChunks" toChunks
             prop "transformBytes tr = map toUpper " transformBytes
             prop "AS.concat $ transformChunks tr = map toUpper " transformChunks
-            prop "thruExe tr = map toUpper " thruExe1
-            prop "error stream of thruExe tr = map toUpper " thruExe2
-            prop "AS.concat $ thruExeChunks tr = map toUpper " thruExeChunks1
-            prop "error stream of thruExeChunks tr = map toUpper " thruExeChunks2
+            -- prop "thruExe tr = map toUpper " thruExe1
+            -- prop "error stream of thruExe tr = map toUpper " thruExe2
+            -- prop "AS.concat $ thruExeChunks tr = map toUpper " thruExeChunks1
+            -- prop "error stream of thruExeChunks tr = map toUpper " thruExeChunks2
     removeFile executableFile
