@@ -28,10 +28,14 @@ import Test.QuickCheck
 import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad (when)
+import Control.Concurrent (threadDelay)
 
 import Data.IORef (IORef (..), newIORef, readIORef, writeIORef)
 import Data.List ((\\))
 import Data.Word (Word8)
+
+oneSecond :: Int
+oneSecond = 1000
 
 _a :: Word8
 _a = 97
@@ -235,7 +239,7 @@ thruExe2 =
             streamIoRef <- run $ newIORef S.nil
             let
                 inputStream = S.fromList ls
-                _ = 
+                outStream = 
                     Proc.thruExe
                     executableFile
                     ["[a-z]", "[A-Z]"]
@@ -244,6 +248,8 @@ thruExe2 =
 
                 charUpperStrm = S.map toUpper inputStream
 
+            run $ S.drain outStream
+            run $ threadDelay oneSecond
             genStrm <- run $ readIORef streamIoRef
             genList <- run $ S.toList genStrm
             charList <- run $ S.toList charUpperStrm
@@ -269,6 +275,29 @@ thruExeChunks1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
+thruExeChunks2 :: Property
+thruExeChunks2 = 
+    forAll (listOf (choose(_a, _z))) $ \ls ->
+        monadicIO $ do
+            streamIoRef <- run $ newIORef S.nil
+            let
+                inputStream = S.fromList ls
+                outStream = 
+                    Proc.thruExeChunks
+                    executableFile
+                    ["[a-z]", "[A-Z]"]
+                    (writeToIoRefFold streamIoRef)
+                    (AS.arraysOf arrayChunkElem inputStream)
+
+                charUpperStrm = S.map toUpper inputStream
+
+            run $ S.drain outStream
+            run $ threadDelay oneSecond
+            genStrm <- run $ readIORef streamIoRef
+            genList <- run $ S.toList genStrm
+            charList <- run $ S.toList charUpperStrm
+            listEquals (==) genList charList
+
 main :: IO ()
 main = do
     createExecutable
@@ -281,4 +310,5 @@ main = do
             prop "thruExe tr = map toUpper " thruExe1
             prop "error stream of thruExe tr = map toUpper " thruExe2
             prop "AS.concat $ thruExeChunks tr = map toUpper " thruExeChunks1
+            prop "error stream of thruExeChunks tr = map toUpper " thruExeChunks2
     removeFile executableFile
