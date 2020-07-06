@@ -78,6 +78,6 @@ test-suite system-process-test
     , directory         >= 1.2.2 && < 1.4
     , hspec             >= 2.0   && < 3
     , QuickCheck        >= 2.10  && < 2.15
-    , exceptions
+    , exceptions        >= 0.8   && < 0.11
 
   default-language: Haskell2010
