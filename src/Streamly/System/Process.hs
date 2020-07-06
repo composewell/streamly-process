@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Streamly.System.Process
-    ( toBytes
+    ( ProcessFailed (..)
+    , toBytes
     , toChunks
     , transformBytes
     , transformChunks
