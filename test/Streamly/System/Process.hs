@@ -29,12 +29,17 @@ import Test.QuickCheck
 import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad (when)
-import Control.Monad.Catch (catch)
-import Control.Exception (ErrorCall(ErrorCallWithLocation))
+import Control.Monad.Catch (throwM, catch)
+import Control.Exception (Exception, displayException)
 
 import Data.IORef (IORef (..), newIORef, readIORef, writeIORef)
 import Data.List ((\\))
 import Data.Word (Word8)
+
+newtype SimpleError = SimpleError String
+    deriving Show
+
+instance Exception SimpleError
 
 _a :: Word8
 _a = 97
@@ -277,10 +282,10 @@ transformBytes_3 = monadicIO $ run checkFailAction
             Proc.transformBytes_
             executableFilePass 
             []
-            (S.nilM $ error failErrorMessage)
+            (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
-    failAction (ErrorCallWithLocation err _) =
+    failAction (SimpleError err) =
         return (err == failErrorMessage)
     
     checkFailAction = catch action failAction
@@ -327,10 +332,10 @@ transformChunks_3 = monadicIO $ run checkFailAction
             Proc.transformChunks_
             executableFilePass 
             []
-            (S.nilM $ error failErrorMessage)
+            (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
-    failAction (ErrorCallWithLocation err _) =
+    failAction (SimpleError err) =
         return (err == failErrorMessage)
     
     checkFailAction = catch action failAction
@@ -397,10 +402,10 @@ transformBytes4 = monadicIO $ run checkFailAction
             executableFilePass 
             []
             FL.drain
-            (S.nilM $ error failErrorMessage)
+            (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
-    failAction (ErrorCallWithLocation err _) =
+    failAction (SimpleError err) =
         return (err == failErrorMessage)
     
     checkFailAction = catch action failAction
@@ -471,10 +476,10 @@ transformChunks4 = monadicIO $ run checkFailAction
             executableFilePass 
             []
             FL.drain
-            (S.nilM $ error failErrorMessage)
+            (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
-    failAction (ErrorCallWithLocation err _) =
+    failAction (SimpleError err) =
         return (err == failErrorMessage)
     
     checkFailAction = catch action failAction
