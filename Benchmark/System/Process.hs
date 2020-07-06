@@ -126,40 +126,40 @@ toChunks hdl = do
     FH.fromChunks hdl $ 
         Proc.toChunks catBinary [largeByteFile]
 
-transformBytes :: (Handle, Handle) -> IO ()
-transformBytes (inputHdl, outputHdl) = do
+transformBytes_ :: (Handle, Handle) -> IO ()
+transformBytes_ (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromBytes outputHdl $ 
-        Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
+        Proc.transformBytes_ trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
 
-transformChunks :: (Handle, Handle) -> IO ()
-transformChunks (inputHdl, outputHdl) = do
+transformChunks_ :: (Handle, Handle) -> IO ()
+transformChunks_ (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromChunks outputHdl $ 
-        Proc.transformChunks trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
+        Proc.transformChunks_ trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
 
-thruExe1 :: (Handle, Handle) -> IO ()
-thruExe1 (inputHdl, outputHdl) = do
+transformBytes1 :: (Handle, Handle) -> IO ()
+transformBytes1 (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromBytes outputHdl $ 
-        Proc.thruExe trBinary ["[a-z]", "[A-Z]"] FL.drain (FH.toBytes inputHdl)
+        Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] FL.drain (FH.toBytes inputHdl)
 
-thruExe2 :: (Handle, Handle) -> IO ()
-thruExe2 (inputHdl, outputHdl) =
+transformBytes2 :: (Handle, Handle) -> IO ()
+transformBytes2 (inputHdl, outputHdl) =
     FH.fromBytes outputHdl $ 
-        Proc.thruExe executableFile ["[a-z]", "[A-Z]"] FL.drain (FH.toBytes inputHdl)
+        Proc.transformBytes executableFile ["[a-z]", "[A-Z]"] FL.drain (FH.toBytes inputHdl)
 
-thruExeChunks1 :: (Handle, Handle) -> IO ()
-thruExeChunks1 (inputHdl, outputHdl) = do
+transformChunks1 :: (Handle, Handle) -> IO ()
+transformChunks1 (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromChunks outputHdl $ 
-        Proc.thruExeChunks trBinary ["[a-z]", "[A-Z]"] FL.drain (FH.toChunks inputHdl)
+        Proc.transformChunks trBinary ["[a-z]", "[A-Z]"] FL.drain (FH.toChunks inputHdl)
 
-thruExeChunks2 :: (Handle, Handle) -> IO ()
-thruExeChunks2 (inputHdl, outputHdl) = do
+transformChunks2 :: (Handle, Handle) -> IO ()
+transformChunks2 (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromChunks outputHdl $ 
-        Proc.thruExeChunks executableFile ["[a-z]", "[A-Z]"] FL.drain (FH.toChunks inputHdl)
+        Proc.transformChunks executableFile ["[a-z]", "[A-Z]"] FL.drain (FH.toChunks inputHdl)
 
 benchWithOut :: IORef Handle -> (Handle -> IO ()) -> Benchmarkable
 benchWithOut nullFileIoRef func = perRunEnv openNewHandle benchCode
@@ -206,17 +206,17 @@ main = do
             bench "exe - array of word8" $
                 benchWithOut ioRefOut toChunks,
             bench "exe - word8 to word8" $ 
-                benchWithInpOut ioRefInpOut transformBytes,
+                benchWithInpOut ioRefInpOut transformBytes_,
             bench "exe - array of word8 to array of word8" $
-                benchWithInpOut ioRefInpOut transformChunks,
+                benchWithInpOut ioRefInpOut transformChunks_,
             bench "exe - word8 to word8 - drain error" $ 
-                benchWithInpOut ioRefInpOut thruExe1,
+                benchWithInpOut ioRefInpOut transformBytes1,
             bench "exe - word8 to standard error - drain error" $ 
-                benchWithInpOut ioRefInpOut thruExe2,
+                benchWithInpOut ioRefInpOut transformBytes2,
             bench "exe - array of word8 to array of word8 - drain error" $
-                benchWithInpOut ioRefInpOut thruExeChunks1,
+                benchWithInpOut ioRefInpOut transformChunks1,
             bench "exe - array of word8 to standard error - drain error" $ 
-                benchWithInpOut ioRefInpOut thruExeChunks2
+                benchWithInpOut ioRefInpOut transformChunks2
         ]
     handleOut1 <- readIORef ioRefOut
     hClose handleOut1

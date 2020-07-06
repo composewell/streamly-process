@@ -4,10 +4,10 @@ module Streamly.System.Process
     ( ProcessFailed (..)
     , toBytes
     , toChunks
+    , transformBytes_
+    , transformChunks_
     , transformBytes
     , transformChunks
-    , thruExe
-    , thruExeChunks
     )
 where
 
@@ -296,14 +296,14 @@ toChunks fpath args = withExe fpath args FH.toChunks
 -- reason
 --
 -- @since 0.1.0.0
-{-# INLINE transformBytes #-}
-transformBytes :: 
+{-# INLINE transformBytes_ #-}
+transformBytes_ :: 
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
     -> t m Word8    -- ^ Input Stream
     -> t m Word8    -- ^ Output Stream
-transformBytes fpath args inStream = 
+transformBytes_ fpath args inStream = 
     AS.concat $ withInpExe fpath args inStream FH.toChunks
 
 -- |
@@ -317,14 +317,14 @@ transformBytes fpath args inStream =
 -- reason
 --
 -- @since 0.1.0.0
-{-# INLINE transformChunks #-}
-transformChunks :: 
+{-# INLINE transformChunks_ #-}
+transformChunks_ :: 
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
     -> t m (Array Word8)    -- ^ Input Stream
     -> t m (Array Word8)    -- ^ Output Stream
-transformChunks fpath args inStream = 
+transformChunks_ fpath args inStream = 
     withInpExe fpath args (AS.concat inStream) FH.toChunks
 
 -- |
@@ -339,15 +339,15 @@ transformChunks fpath args inStream =
 -- reason. The Fold would continue if you would catch the thrown exception.
 --
 -- @since 0.1.0.0
-{-# INLINE thruExe #-}
-thruExe :: 
+{-# INLINE transformBytes #-}
+transformBytes :: 
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath         -- ^ Path to executable
     -> [String]         -- ^ Arguments to pass to executable
     -> Fold m Word8 b   -- ^ Fold to fold Error Stream
     -> t m Word8        -- ^ Input Stream
     -> t m Word8        -- ^ Output Stream
-thruExe fpath args fld inStream =
+transformBytes fpath args fld inStream =
     withErrExe fpath args fld inStream FH.toBytes
 
 -- |
@@ -362,13 +362,13 @@ thruExe fpath args fld inStream =
 -- reason. The Fold would continue if you would catch the thrown exception.
 --
 -- @since 0.1.0.0
-{-# INLINE thruExeChunks #-}
-thruExeChunks :: 
+{-# INLINE transformChunks #-}
+transformChunks :: 
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath                 -- ^ Path to executable
     -> [String]                 -- ^ Arguments to pass to executable
     -> Fold m Word8 b           -- ^ Fold to fold Error Stream
     -> t m (Array Word8)        -- ^ Input Stream
     -> t m (Array Word8)        -- ^ Output Stream
-thruExeChunks fpath args fld inStream =
+transformChunks fpath args fld inStream =
     withErrExe fpath args fld (AS.concat inStream) FH.toChunks
