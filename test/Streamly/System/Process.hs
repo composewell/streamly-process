@@ -29,12 +29,17 @@ import Test.QuickCheck
 import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad (when)
-import Control.Monad.Catch (catch)
-import Control.Exception (ErrorCall(ErrorCallWithLocation))
+import Control.Monad.Catch (throwM, catch)
+import Control.Exception (Exception, displayException)
 
 import Data.IORef (IORef (..), newIORef, readIORef, writeIORef)
 import Data.List ((\\))
 import Data.Word (Word8)
+
+newtype SimpleError = SimpleError String
+    deriving Show
+
+instance Exception SimpleError
 
 _a :: Word8
 _a = 97
@@ -245,7 +250,10 @@ transformBytes_1 =
             trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
-                genStrm = Proc.transformBytes_ trBinary ["[a-z]", "[A-Z]"] inputStream
+                genStrm = Proc.transformBytes_ 
+                            trBinary 
+                            ["[a-z]", "[A-Z]"] 
+                            inputStream
                 charUpperStrm = S.map toUpper inputStream
 
             genList <- run $ S.toList genStrm
@@ -274,10 +282,10 @@ transformBytes_3 = monadicIO $ run checkFailAction
             Proc.transformBytes_
             executableFilePass 
             []
-            (S.nilM $ error failErrorMessage)
+            (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
-    failAction (ErrorCallWithLocation err _) =
+    failAction (SimpleError err) =
         return (err == failErrorMessage)
     
     checkFailAction = catch action failAction
@@ -324,10 +332,10 @@ transformChunks_3 = monadicIO $ run checkFailAction
             Proc.transformChunks_
             executableFilePass 
             []
-            (S.nilM $ error failErrorMessage)
+            (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
-    failAction (ErrorCallWithLocation err _) =
+    failAction (SimpleError err) =
         return (err == failErrorMessage)
     
     checkFailAction = catch action failAction
@@ -339,7 +347,10 @@ transformBytes1 =
             trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
-                genStrm = Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] FL.drain inputStream
+                genStrm = Proc.transformBytes
+                            trBinary 
+                            ["[a-z]", "[A-Z]"] 
+                            FL.drain inputStream
                 charUpperStrm = S.map toUpper inputStream
 
             genList <- run $ S.toList genStrm
@@ -391,10 +402,10 @@ transformBytes4 = monadicIO $ run checkFailAction
             executableFilePass 
             []
             FL.drain
-            (S.nilM $ error failErrorMessage)
+            (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
-    failAction (ErrorCallWithLocation err _) =
+    failAction (SimpleError err) =
         return (err == failErrorMessage)
     
     checkFailAction = catch action failAction
@@ -465,10 +476,10 @@ transformChunks4 = monadicIO $ run checkFailAction
             executableFilePass 
             []
             FL.drain
-            (S.nilM $ error failErrorMessage)
+            (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
-    failAction (ErrorCallWithLocation err _) =
+    failAction (SimpleError err) =
         return (err == failErrorMessage)
     
     checkFailAction = catch action failAction
@@ -485,15 +496,23 @@ main = do
             prop "transformBytes_ tr = map toUpper" transformBytes_1
             prop "transformBytes_ on failing executable" transformBytes_2
             prop "transformBytes_ using error stream" transformBytes_3
-            prop "AS.concat $ transformChunks_ tr = map toUpper" transformChunks_1
+            prop 
+                "AS.concat $ transformChunks_ tr = map toUpper" 
+                transformChunks_1
             prop "transformChunks_ on failing executable" transformChunks_2
             prop "transformChunks_ using error stream" transformChunks_3
             prop "transformBytes tr = map toUpper" transformBytes1
-            prop "error stream of transformBytes tr = map toUpper" transformBytes2
+            prop 
+                "error stream of transformBytes tr = map toUpper" 
+                transformBytes2
             prop "transformBytes on failing executable" transformBytes3
             prop "transformBytes using error stream" transformBytes4
-            prop "AS.concat $ transformChunks tr = map toUpper" transformChunks1
-            prop "error stream of transformChunks tr = map toUpper" transformChunks2
+            prop 
+                "AS.concat $ transformChunks tr = map toUpper"
+                transformChunks1
+            prop 
+                "error stream of transformChunks tr = map toUpper"
+                transformChunks2
             prop "transformChunks on failing executable" transformChunks3
             prop "transformChunks using error stream" transformChunks4
     removeExecutables

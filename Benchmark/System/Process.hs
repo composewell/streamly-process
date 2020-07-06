@@ -23,7 +23,14 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.IORef (IORef (..), newIORef, readIORef, writeIORef)
 import Data.Word (Word8)
 
-import Gauge (Benchmarkable, defaultMain, bench, nfIO, perRunEnv, perRunEnvWithCleanup)
+import Gauge 
+    ( Benchmarkable
+    , defaultMain
+    , bench
+    , nfIO
+    , perRunEnv
+    , perRunEnvWithCleanup
+    )
 
 _a :: Word8
 _a = 97
@@ -130,38 +137,62 @@ transformBytes_ :: (Handle, Handle) -> IO ()
 transformBytes_ (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromBytes outputHdl $ 
-        Proc.transformBytes_ trBinary ["[a-z]", "[A-Z]"] (FH.toBytes inputHdl)
+        Proc.transformBytes_ 
+            trBinary 
+            ["[a-z]", "[A-Z]"] 
+            (FH.toBytes inputHdl)
 
 transformChunks_ :: (Handle, Handle) -> IO ()
 transformChunks_ (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromChunks outputHdl $ 
-        Proc.transformChunks_ trBinary ["[a-z]", "[A-Z]"] (FH.toChunks inputHdl)
+        Proc.transformChunks_ 
+            trBinary 
+            ["[a-z]", "[A-Z]"] 
+            (FH.toChunks inputHdl)
 
 transformBytes1 :: (Handle, Handle) -> IO ()
 transformBytes1 (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromBytes outputHdl $ 
-        Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] FL.drain (FH.toBytes inputHdl)
+        Proc.transformBytes 
+            trBinary 
+            ["[a-z]", "[A-Z]"] 
+            FL.drain 
+            (FH.toBytes inputHdl)
 
 transformBytes2 :: (Handle, Handle) -> IO ()
 transformBytes2 (inputHdl, outputHdl) =
     FH.fromBytes outputHdl $ 
-        Proc.transformBytes executableFile ["[a-z]", "[A-Z]"] FL.drain (FH.toBytes inputHdl)
+        Proc.transformBytes 
+            executableFile 
+            ["[a-z]", "[A-Z]"] 
+            FL.drain 
+            (FH.toBytes inputHdl)
 
 transformChunks1 :: (Handle, Handle) -> IO ()
 transformChunks1 (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromChunks outputHdl $ 
-        Proc.transformChunks trBinary ["[a-z]", "[A-Z]"] FL.drain (FH.toChunks inputHdl)
+        Proc.transformChunks 
+            trBinary 
+            ["[a-z]", "[A-Z]"] 
+            FL.drain 
+            (FH.toChunks inputHdl)
 
 transformChunks2 :: (Handle, Handle) -> IO ()
 transformChunks2 (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
     FH.fromChunks outputHdl $ 
-        Proc.transformChunks executableFile ["[a-z]", "[A-Z]"] FL.drain (FH.toChunks inputHdl)
+        Proc.transformChunks 
+            executableFile 
+            ["[a-z]", "[A-Z]"] 
+            FL.drain (FH.toChunks inputHdl)
 
-benchWithOut :: IORef Handle -> (Handle -> IO ()) -> Benchmarkable
+benchWithOut :: 
+    IORef Handle 
+    -> (Handle -> IO ()) 
+    -> Benchmarkable
 benchWithOut nullFileIoRef func = perRunEnv openNewHandle benchCode
 
     where
@@ -176,7 +207,10 @@ benchWithOut nullFileIoRef func = perRunEnv openNewHandle benchCode
         handle <- readIORef nullFileIoRef
         func handle
 
-benchWithInpOut :: IORef (Handle, Handle) -> ((Handle, Handle) -> IO ()) -> Benchmarkable
+benchWithInpOut :: 
+    IORef (Handle, Handle) 
+    -> ((Handle, Handle) -> IO ()) 
+    -> Benchmarkable
 benchWithInpOut inpOutIoRef func = perRunEnv openNewHandles benchCode
 
     where

@@ -72,7 +72,7 @@ test-suite system-process-test
   build-depends:
       streamly-process
     , streamly
-    , base              >= 4.9   && < 5
+    , base              >= 4.8   && < 5
     , process           >= 1.0   && < 1.7
     , transformers      >= 0.4   && < 0.6
     , directory         >= 1.2.2 && < 1.4
