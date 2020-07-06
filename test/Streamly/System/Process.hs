@@ -245,7 +245,10 @@ transformBytes_1 =
             trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
-                genStrm = Proc.transformBytes_ trBinary ["[a-z]", "[A-Z]"] inputStream
+                genStrm = Proc.transformBytes_ 
+                            trBinary 
+                            ["[a-z]", "[A-Z]"] 
+                            inputStream
                 charUpperStrm = S.map toUpper inputStream
 
             genList <- run $ S.toList genStrm
@@ -339,7 +342,10 @@ transformBytes1 =
             trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
-                genStrm = Proc.transformBytes trBinary ["[a-z]", "[A-Z]"] FL.drain inputStream
+                genStrm = Proc.transformBytes
+                            trBinary 
+                            ["[a-z]", "[A-Z]"] 
+                            FL.drain inputStream
                 charUpperStrm = S.map toUpper inputStream
 
             genList <- run $ S.toList genStrm
@@ -485,15 +491,23 @@ main = do
             prop "transformBytes_ tr = map toUpper" transformBytes_1
             prop "transformBytes_ on failing executable" transformBytes_2
             prop "transformBytes_ using error stream" transformBytes_3
-            prop "AS.concat $ transformChunks_ tr = map toUpper" transformChunks_1
+            prop 
+                "AS.concat $ transformChunks_ tr = map toUpper" 
+                transformChunks_1
             prop "transformChunks_ on failing executable" transformChunks_2
             prop "transformChunks_ using error stream" transformChunks_3
             prop "transformBytes tr = map toUpper" transformBytes1
-            prop "error stream of transformBytes tr = map toUpper" transformBytes2
+            prop 
+                "error stream of transformBytes tr = map toUpper" 
+                transformBytes2
             prop "transformBytes on failing executable" transformBytes3
             prop "transformBytes using error stream" transformBytes4
-            prop "AS.concat $ transformChunks tr = map toUpper" transformChunks1
-            prop "error stream of transformChunks tr = map toUpper" transformChunks2
+            prop 
+                "AS.concat $ transformChunks tr = map toUpper"
+                transformChunks1
+            prop 
+                "error stream of transformChunks tr = map toUpper"
+                transformChunks2
             prop "transformChunks on failing executable" transformChunks3
             prop "transformChunks using error stream" transformChunks4
     removeExecutables
