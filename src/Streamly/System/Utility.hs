@@ -103,6 +103,7 @@ parseCommand = do
     execName <- P.takeWhile (/= ' ') FL.toList
     P.takeWhile (== ' ') FL.drain
     argList <- parseAllArgs
+    P.eof
     return (execName, argList)
 
 escapeCommand :: String -> (String, [String])
