@@ -7,14 +7,23 @@ where
 import qualified Streamly.Internal.Prelude as S
 import qualified Streamly.Internal.Data.Fold as FL
 import qualified Streamly.Internal.Data.Parser.ParserD as P
-import Streamly.Internal.Data.Parser.ParserD (Parser)
+import Streamly.Internal.Data.Parser.ParserD (Parser(..))
+import Streamly.Internal.Data.Parser.ParserD.Types (Step (..))
 
 import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Identity (Identity(..))
+
+isEof :: Monad m => Parser m a Bool
+isEof = Parser step initial return
+  where
+    initial = return True
+    step _ _ = return $ Done 1 False
+
+conv2list :: Monad m => Parser m a b -> Parser m a [b]
+conv2list parser = fmap (\x -> [x]) parser
 
 singleQuote :: MonadCatch m => Parser m Char [Char]
-singleQuote = fmap (\x -> [x]) $ P.satisfy (=='\'')
+singleQuote = conv2list $ P.satisfy (=='\'')
 
 parseWithinSingle :: MonadCatch m => Parser m Char String
 parseWithinSingle = do
@@ -39,7 +48,7 @@ parseManySingleQuote :: MonadCatch m => Parser m Char String
 parseManySingleQuote = P.some FL.mconcat parseSingleQuoteArg
 
 doubleQuote :: MonadCatch m => Parser m Char [Char]
-doubleQuote = fmap (\x -> [x]) $ P.satisfy (=='"')
+doubleQuote = conv2list $ P.satisfy (=='"')
 
 parseWithinDouble :: MonadCatch m => Parser m Char String
 parseWithinDouble = do
@@ -65,26 +74,39 @@ parseManyDoubleQuote = P.some FL.mconcat parseDoubleQuoteArg
 
 parseNoQuote :: MonadCatch m => Parser m Char String
 parseNoQuote = do
-    let noFailCond char = char /= '\\' && char /= '"'
+    let noFailCond char = char /= '\\' && char /= '"' && char /= ' '
     str <- P.takeWhile noFailCond FL.toList
-    P.eof
-    return str
+    eof <- isEof
+    if eof then
+        return str
+    else
+        do
+            failChar <- P.peek
+            if failChar == ' ' then
+                return str
+            else
+                P.die "Command Parse Error"
 
 parseArgument :: MonadCatch m => Parser m Char String
 parseArgument = parseManySingleQuote <|> parseManyDoubleQuote <|> parseNoQuote
 
-escapeArgument :: String -> String
-escapeArgument arg =
-    case S.parseD parseArgument (S.fromList arg) of
-        Right str -> str
-        Left _ -> error "Command Parse Error"
+parseCommand :: MonadCatch m => Parser m Char (String, [String])
+parseCommand = do
+    let 
+        parseArgWithSpace = do
+            arg <- parseArgument
+            P.takeWhile (== ' ') FL.drain
+            return arg
 
-splitOnSpace :: String -> [String]
-splitOnSpace ls =
-    case S.toList $ S.splitOn (==' ') FL.toList (S.fromList ls) of
-        Identity splitLs -> splitLs
+        parseAllArgs = P.many FL.toList parseArgWithSpace
+
+    execName <- P.takeWhile (/= ' ') FL.toList
+    P.takeWhile (== ' ') FL.drain
+    argList <- parseAllArgs
+    return (execName, argList)
 
 escapeCommand :: String -> (String, [String])
-escapeCommand command = case splitOnSpace command of
-    [] -> error "No Executable"
-    (execFilePath : unEscapedArgList) -> (execFilePath, map escapeArgument unEscapedArgList)
+escapeCommand command =
+    case S.parseD parseCommand (S.fromList command) of
+        Left _ -> error "Command Parse Error"
+        Right parsedCmd -> parsedCmd
