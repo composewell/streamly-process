@@ -55,16 +55,16 @@ _Z = 90
 
 ioCatBinary :: IO FilePath
 ioCatBinary = do
-    maybeDdBinary <- findExecutable "cat"
-    case maybeDdBinary of
-        Just ddBinary -> return ddBinary
+    maybeCatBinary <- findExecutable "cat"
+    case maybeCatBinary of
+        Just catBinary -> return catBinary
         _ -> error "cat Binary Not Found"
 
 ioTrBinary :: IO FilePath
 ioTrBinary = do
-    maybeDdBinary <- findExecutable "tr"
-    case maybeDdBinary of
-        Just ddBinary -> return ddBinary
+    maybeTrBinary <- findExecutable "tr"
+    case maybeTrBinary of
+        Just trBinary -> return trBinary
         _ -> error "tr Binary Not Found"
 
 failErrorMessage :: String
@@ -157,25 +157,25 @@ generateCharFile numCharInCharFile = do
     hClose handle
 
 writeToIoRefFold :: 
-    (IsStream t, MonadIO m)
-    => IORef (t m Word8)
+    MonadIO m
+    => IORef [Word8]
     -> Fold m Word8 ()
 writeToIoRefFold ioRef = FL.Fold step initial extract
 
     where
     
     step _ newEle = do
-        stream <- liftIO $ readIORef ioRef
-        let newStream = S.cons newEle stream
-        liftIO $ writeIORef ioRef newStream
+        list <- liftIO $ readIORef ioRef
+        let newList = newEle : list
+        liftIO $ writeIORef ioRef newList
         return ()
 
-    initial = liftIO $ writeIORef ioRef S.nil
+    initial = liftIO $ writeIORef ioRef []
 
     extract _ = do
-        stream <- liftIO $ readIORef ioRef
-        let reverseStream = S.reverse stream
-        liftIO $ writeIORef ioRef reverseStream 
+        list <- liftIO $ readIORef ioRef
+        let reverseList = Prelude.reverse list
+        liftIO $ writeIORef ioRef reverseList 
 
 toBytes1 :: Property
 toBytes1 = 
@@ -361,21 +361,20 @@ transformBytes2 :: Property
 transformBytes2 = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            streamIoRef <- run $ newIORef S.nil
+            listIoRef <- run $ newIORef []
             let
                 inputStream = S.fromList ls
                 outStream = 
                     Proc.transformBytes
                     executableFile
                     ["[a-z]", "[A-Z]"]
-                    (writeToIoRefFold streamIoRef)
+                    (writeToIoRefFold listIoRef)
                     inputStream
 
                 charUpperStrm = S.map toUpper inputStream
 
             run $ S.drain outStream
-            genStrm <- run $ readIORef streamIoRef
-            genList <- run $ S.toList genStrm
+            genList <- run $ readIORef listIoRef
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
@@ -435,21 +434,20 @@ transformChunks2 :: Property
 transformChunks2 = 
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            streamIoRef <- run $ newIORef S.nil
+            listIoRef <- run $ newIORef []
             let
                 inputStream = S.fromList ls
                 outStream = 
                     Proc.transformChunks
                     executableFile
                     ["[a-z]", "[A-Z]"]
-                    (writeToIoRefFold streamIoRef)
+                    (writeToIoRefFold listIoRef)
                     (AS.arraysOf arrayChunkElem inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
 
             run $ S.drain outStream
-            genStrm <- run $ readIORef streamIoRef
-            genList <- run $ S.toList genStrm
+            genList <- run $ readIORef listIoRef
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
