@@ -12,6 +12,7 @@ import Streamly.Internal.Data.Parser.ParserD.Types (Step (..))
 
 import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadCatch)
+import Control.Exception (displayException)
 
 isEof :: Monad m => Parser m a Bool
 isEof = Parser step initial return
@@ -109,5 +110,5 @@ parseCommand = do
 escapeCommand :: String -> (String, [String])
 escapeCommand command =
     case S.parseD parseCommand (S.fromList command) of
-        Left _ -> error "Command Parse Error"
+        Left e -> error $ displayException e
         Right parsedCmd -> parsedCmd
