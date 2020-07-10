@@ -1,24 +1,28 @@
 module Streamly.System.Utility 
     (
-        escapeCommand
+        unquoteCommand
     )
 where
 
 import qualified Streamly.Internal.Prelude as S
 import qualified Streamly.Internal.Data.Fold as FL
-import qualified Streamly.Internal.Data.Parser.ParserD as P
-import Streamly.Internal.Data.Parser.ParserD (Parser(..))
+import qualified Streamly.Internal.Data.Parser as P
+import qualified Streamly.Internal.Data.Parser.ParserD as D
+import Streamly.Internal.Data.Parser (Parser(..))
 import Streamly.Internal.Data.Parser.ParserD.Types (Step (..))
 
 import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadCatch)
 import Control.Exception (displayException)
 
-isEof :: Monad m => Parser m a Bool
-isEof = Parser step initial return
+isEofD :: Monad m => D.Parser m a Bool
+isEofD = D.Parser step initial return
   where
     initial = return True
     step _ _ = return $ Done 1 False
+
+isEof :: MonadCatch m => Parser m a Bool
+isEof = D.toParserK isEofD
 
 conv2list :: Monad m => Parser m a b -> Parser m a [b]
 conv2list parser = fmap (\x -> [x]) parser
@@ -107,8 +111,8 @@ parseCommand = do
     P.eof
     return (execName, argList)
 
-escapeCommand :: String -> (String, [String])
-escapeCommand command =
-    case S.parseD parseCommand (S.fromList command) of
+unquoteCommand :: String -> (String, [String])
+unquoteCommand command =
+    case S.parse parseCommand (S.fromList command) of
         Left e -> error $ displayException e
         Right parsedCmd -> parsedCmd
