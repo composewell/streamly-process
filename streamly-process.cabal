@@ -21,7 +21,7 @@ build-type:          Simple
 extra-source-files:  CHANGELOG.md, README.md
 
 library
-  ghc-options: -Wall
+  ghc-options: -O2 -Wall
   hs-source-dirs: src
   build-depends:
       streamly
