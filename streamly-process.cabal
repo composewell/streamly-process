@@ -33,7 +33,7 @@ library
   ghc-options: -Wall
   hs-source-dirs: src
   build-depends:
-      streamly
+      streamly          >= 0.7.1 && < 0.8
     , primitive         >= 0.5.4 && < 0.8
     , base              >= 4.8   && < 5
     , process           >= 1.0   && < 1.7
@@ -53,7 +53,7 @@ benchmark process-bench
   main-is: Process.hs
   build-depends:
       streamly-process
-    , streamly
+    , streamly          >= 0.7.1 && < 0.8
     , base              >= 4.8   && < 5
     , process           >= 1.0   && < 1.7
     , transformers      >= 0.4   && < 0.6
@@ -72,7 +72,7 @@ test-suite system-process-test
   main-is: Process.hs
   build-depends:
       streamly-process
-    , streamly
+    , streamly          >= 0.7.1 && < 0.8
     , base              >= 4.8   && < 5
     , process           >= 1.0   && < 1.7
     , transformers      >= 0.4   && < 0.6
