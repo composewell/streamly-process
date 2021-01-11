@@ -20,15 +20,11 @@ module Streamly.System.Process
     )
 where
 
-import Streamly (parallel)
-import qualified Streamly.Internal.Prelude as S
-import qualified Streamly.Internal.FileSystem.Handle as FH
-import qualified Streamly.Internal.Memory.ArrayStream as AS
-import Streamly.Internal.Data.Fold (Fold)
-import Streamly.Internal.Data.SVar (MonadAsync)
-import Streamly.Internal.Memory.Array.Types (Array)
-import Streamly.Internal.Data.Stream.StreamK.Type (IsStream, adapt)
 
+import Control.Exception (Exception, displayException)
+import Control.Monad.Catch (MonadCatch, throwM)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Word (Word8)
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
 import System.Process
@@ -41,13 +37,14 @@ import System.Process
     , waitForProcess
     )
 
-import Data.Word (Word8)
+import Streamly.Data.Fold (Fold)
+import Streamly.Memory.Array (Array)
+import Streamly (MonadAsync, parallel, IsStream, adapt)
+import qualified Streamly.Internal.Prelude as S
+import qualified Streamly.Internal.FileSystem.Handle as FH
+import qualified Streamly.Internal.Memory.ArrayStream as AS
 
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Catch (MonadCatch, throwM)
-import Control.Exception (Exception, displayException)
-
--- | 
+-- |
 -- ProcessFailed exception which would be raised when process which
 -- is made to run fails. The integer it contains is the exit code
 -- of the failed process
@@ -59,12 +56,12 @@ newtype ProcessFailed = ProcessFailed Int
 -- Exception instance of ProcessFailed
 instance Exception ProcessFailed where
 
-    displayException (ProcessFailed exitCodeInt) = 
+    displayException (ProcessFailed exitCodeInt) =
         "Process Failed With Exit Code " ++ show exitCodeInt
 
 -- |
 -- Takes a process handle and waits for the process to exit, and then
--- raises 'ProcessFailed' exception if process failed with some 
+-- raises 'ProcessFailed' exception if process failed with some
 -- exit code, else peforms no action
 --
 -- @since 0.1.0.0
@@ -75,17 +72,17 @@ exceptOnError procHandle = liftIO $ do
         ExitSuccess -> return ()
         ExitFailure exitCodeInt -> throwM $ ProcessFailed exitCodeInt
 
--- | 
+-- |
 -- Creates a process using the path to executable and arguments, then
--- connects a pipe's write end with output of the process, and 
+-- connects a pipe's write end with output of the process, and
 -- returns the read end's handle and the process handle of the process
 --
 -- @since 0.1.0.0
 {-# INLINE openProc #-}
-openProc :: 
+openProc ::
     FilePath                        -- ^ Path to Executable
     -> [String]                     -- ^ Arguments
-    -> IO (Handle, ProcessHandle)   
+    -> IO (Handle, ProcessHandle)
     -- ^ Handle to read from output of process, process handle
 openProc fpath args = do
     (readEnd, writeEnd) <- createPipe
@@ -97,9 +94,9 @@ openProc fpath args = do
     (_, _, _, procHandle) <- createProcess procObj
     return (readEnd, procHandle)
 
--- | 
+-- |
 -- Creates a process using the path to executable and arguments, then
--- connects a pipe's write end with output of the process and 
+-- connects a pipe's write end with output of the process and
 -- generates a stream based on a function which takes the read end of the
 -- pipe and generates a stream
 --
@@ -108,12 +105,12 @@ openProc fpath args = do
 --
 -- @since 0.1.0.0
 {-# INLINE withExe #-}
-withExe :: 
+withExe ::
         (IsStream t, MonadCatch m, MonadIO m)
         => FilePath          -- ^ Path to Executable
         -> [String]          -- ^ Arguments
-        -> (Handle -> t m a) 
-        -- ^ Given handle to read from output of 
+        -> (Handle -> t m a)
+        -- ^ Given handle to read from output of
         -- process generate stream output
         -> t m a             -- ^ Stream produced
 withExe fpath args genStrm = S.bracket pre post body
@@ -122,31 +119,31 @@ withExe fpath args genStrm = S.bracket pre post body
 
     pre = liftIO $ openProc fpath args
 
-    post (readHdl, procHandle) = 
+    post (readHdl, procHandle) =
         liftIO $ hClose readHdl >> exceptOnError procHandle
 
     body (readHdl, _) = genStrm readHdl
 
--- | 
+-- |
 -- Creates a process using the path to executable and arguments, then
 -- builds two pipes, one whose read end is made the process's standard
 -- input, and another whose write end is made the process's standard
--- output. The function returns the handle to write end to the 
+-- output. The function returns the handle to write end to the
 -- process's input, handle to read end to process's output and
 -- process handle of the process
 --
 -- @since 0.1.0.0
 {-# INLINE openProcInp #-}
-openProcInp ::  
+openProcInp ::
     FilePath                                -- ^ Path to Executable
     -> [String]                             -- ^ Arguments
-    -> IO (Handle, Handle, ProcessHandle)   
+    -> IO (Handle, Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Process Handle)
 openProcInp fpath args = do
     (readInpEnd, writeInpEnd) <- createPipe
     (readOutEnd, writeOutEnd) <- createPipe
     let procObj = (proc fpath args) {
-            std_in = UseHandle readInpEnd, 
+            std_in = UseHandle readInpEnd,
             std_out = UseHandle writeOutEnd,
             close_fds = True
         }
@@ -154,11 +151,11 @@ openProcInp fpath args = do
     (_, _, _, procHandle) <- createProcess procObj
     return (writeInpEnd, readOutEnd, procHandle)
 
--- | 
+-- |
 -- Creates a process using the path to executable, arguments and a stream
--- which would be used as input to the process (passed as standard input), 
--- then connects a pipe's write end with output of the process and generates 
--- a stream based on a function which takes the read end of the pipe and 
+-- which would be used as input to the process (passed as standard input),
+-- then connects a pipe's write end with output of the process and generates
+-- a stream based on a function which takes the read end of the pipe and
 -- generates a stream.
 --
 -- Raises an exception 'ProcessFailed' if process failed due to some
@@ -166,30 +163,30 @@ openProcInp fpath args = do
 --
 -- @since 0.1.0.0
 {-# INLINE withInpExe #-}
-withInpExe :: 
+withInpExe ::
     (IsStream t, MonadCatch m, MonadIO m, MonadAsync m)
     => FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> t m Word8            -- ^ Input stream to the process
-    -> (Handle -> t m a)    
+    -> (Handle -> t m a)
     -- ^ Handle to read output of process and generate stream
     -> t m a                -- ^ Stream produced
 withInpExe fpath args input genStrm = S.bracket pre post body
 
     where
-        
-    writeAction writeHdl = 
+
+    writeAction writeHdl =
         FH.fromBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
 
     pre = liftIO $ openProcInp fpath args
 
-    post (_, readHdl, procHandle) = 
+    post (_, readHdl, procHandle) =
         liftIO $ hClose readHdl >> exceptOnError procHandle
-    
-    body (writeHdl, readHdl, _) = 
+
+    body (writeHdl, readHdl, _) =
         parallel (S.nilM $ writeAction writeHdl) (genStrm readHdl)
 
--- | 
+-- |
 -- Creates a process using the path to executable and arguments, then
 -- builds three pipes, one whose read end is made the process's standard
 -- input, and another whose write end is made the process's standard
@@ -199,17 +196,17 @@ withInpExe fpath args input genStrm = S.bracket pre post body
 -- error and process handle of the process
 --
 -- @since 0.1.0.0
-openProcErr ::  
+openProcErr ::
     FilePath                                -- ^ Path to Executable
     -> [String]                             -- ^ Arguments
-    -> IO (Handle, Handle, Handle, ProcessHandle)   
+    -> IO (Handle, Handle, Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
 openProcErr fpath args = do
     (readInpEnd, writeInpEnd) <- createPipe
     (readOutEnd, writeOutEnd) <- createPipe
     (readErrEnd, writeErrEnd) <- createPipe
     let procObj = (proc fpath args) {
-            std_in = UseHandle readInpEnd, 
+            std_in = UseHandle readInpEnd,
             std_out = UseHandle writeOutEnd,
             std_err = UseHandle writeErrEnd,
             close_fds = True
@@ -218,7 +215,7 @@ openProcErr fpath args = do
     (_, _, _, procHandle) <- createProcess procObj
     return (writeInpEnd, readOutEnd, readErrEnd, procHandle)
 
--- | 
+-- |
 -- Creates a process using the path to executable, arguments and a stream
 -- which would be used as input to the process (passed as standard input),
 -- then using a pipe, it reads from the process's standard error and folds
@@ -236,29 +233,29 @@ withErrExe ::
     -> [String]             -- ^ Arguments
     -> Fold m Word8 b       -- ^ Fold to fold the error stream
     -> t m Word8            -- ^ Input stream to the process
-    -> (Handle -> t m a)    
+    -> (Handle -> t m a)
     -- ^ Handle to read output of process and generate stream
     -> t m a                -- ^ Stream produced
 withErrExe fpath args fld input genStrm = S.bracket pre post body
 
     where
-        
-    writeAction writeHdl = 
+
+    writeAction writeHdl =
         FH.fromBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
-    
+
     foldErrAction errorHdl =
         S.fold fld (FH.toBytes errorHdl) >> liftIO (hClose errorHdl)
 
     runActions writeHdl errorHdl = parallel
-        (S.nilM $ writeAction writeHdl) 
+        (S.nilM $ writeAction writeHdl)
         (S.nilM $ foldErrAction errorHdl)
 
     pre = liftIO $ openProcErr fpath args
 
-    post (_, readHdl, _, procHandle) = 
+    post (_, readHdl, _, procHandle) =
         liftIO $ hClose readHdl >> exceptOnError procHandle
-    
-    body (writeHdl, readHdl, errorHdl, _) = 
+
+    body (writeHdl, readHdl, errorHdl, _) =
         parallel (runActions writeHdl errorHdl) (genStrm readHdl)
 
 -- |
@@ -271,7 +268,7 @@ withErrExe fpath args fld input genStrm = S.bracket pre post body
 --
 -- @since 0.1.0.0
 {-# INLINE toBytes #-}
-toBytes ::  
+toBytes ::
     (IsStream t, MonadIO m, MonadCatch m)
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
@@ -287,7 +284,7 @@ toBytes fpath args = AS.concat $ withExe fpath args FH.toChunks
 -- reason
 --
 -- @since 0.1.0.0
-toChunks ::    
+toChunks ::
     (IsStream t, MonadIO m, MonadCatch m)
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
@@ -297,29 +294,27 @@ toChunks fpath args = withExe fpath args FH.toChunks
 -- |
 -- Runs a process specified by the path to executable, arguments
 -- that are to be passed and input to be provided to the process
--- (standard input) in the form of a stream of Word8 and returns 
--- the output of the process (standard output) in the form of a 
--- stream of Word8
+-- (standard input) and returns the output of the process (standard output).
 --
 -- Raises an exception 'ProcessFailed' if process failed due to some
 -- reason
 --
 -- @since 0.1.0.0
 {-# INLINE transformBytes_ #-}
-transformBytes_ :: 
+transformBytes_ ::
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
     -> t m Word8    -- ^ Input Stream
     -> t m Word8    -- ^ Output Stream
-transformBytes_ fpath args inStream = 
+transformBytes_ fpath args inStream =
     AS.concat $ withInpExe fpath args inStream FH.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
 -- that are to be passed and input to be provided to the process
--- (standard input) in the form of a stream of array of Word8 
--- and returns the output of the process (standard output) in 
+-- (standard input) in the form of a stream of array of Word8
+-- and returns the output of the process (standard output) in
 -- the form of a stream of array of Word8
 --
 -- Raises an exception 'ProcessFailed' If process failed due to some
@@ -327,13 +322,13 @@ transformBytes_ fpath args inStream =
 --
 -- @since 0.1.0.0
 {-# INLINE transformChunks_ #-}
-transformChunks_ :: 
+transformChunks_ ::
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
     -> t m (Array Word8)    -- ^ Input Stream
     -> t m (Array Word8)    -- ^ Output Stream
-transformChunks_ fpath args inStream = 
+transformChunks_ fpath args inStream =
     withInpExe fpath args (AS.concat inStream) FH.toChunks
 
 -- |
@@ -341,7 +336,7 @@ transformChunks_ fpath args inStream =
 -- that are to be passed and input to be provided to the process
 -- (standard input) in the form of a stream of Word8 and folds
 -- the error stream using the given Fold along with returning
--- the output of the process (standard output) in the form of a 
+-- the output of the process (standard output) in the form of a
 -- stream of Word8
 --
 -- Raises an exception 'ProcessFailed' if process failed due to some
@@ -349,7 +344,7 @@ transformChunks_ fpath args inStream =
 --
 -- @since 0.1.0.0
 {-# INLINE transformBytes #-}
-transformBytes :: 
+transformBytes ::
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath         -- ^ Path to executable
     -> [String]         -- ^ Arguments to pass to executable
@@ -364,7 +359,7 @@ transformBytes fpath args fld inStream =
 -- that are to be passed and input to be provided to the process
 -- (standard input) in the form of a array of Word8 and folds
 -- the error stream using the given Fold along with returning
--- the output of the process (standard output) in the form of a 
+-- the output of the process (standard output) in the form of a
 -- array of Word8
 --
 -- Raises an exception 'ProcessFailed' if process failed due to some
@@ -372,7 +367,7 @@ transformBytes fpath args fld inStream =
 --
 -- @since 0.1.0.0
 {-# INLINE transformChunks #-}
-transformChunks :: 
+transformChunks ::
     (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
     => FilePath                 -- ^ Path to executable
     -> [String]                 -- ^ Arguments to pass to executable
