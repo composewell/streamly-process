@@ -11,9 +11,9 @@ description:
   .
 homepage:            https://github.com/composewell/streamly-process
 bug-reports:         https://github.com/composewell/streamly-process/issues
-license:             BSD-3-Clause
+license:             Apache-2.0
 license-file:        LICENSE
-author:              Ahmed Zaheer Dadarkar
+author:              Composewell Technologies
 maintainer:          streamly@composewell.com
 copyright:           Composewell Technologies
 category:            Control, Concurrency, Streaming, Processes
@@ -27,6 +27,7 @@ extra-source-files:
     CHANGELOG.md
     README.md
     design/proposal.md
+    NOTICE
 
 library
   ghc-options: -Wall
