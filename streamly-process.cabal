@@ -18,16 +18,16 @@ maintainer:          streamly@composewell.com
 copyright:           Composewell Technologies
 category:            Control, Concurrency, Streaming, Processes
 build-type:          Simple
-extra-source-files: 
+extra-source-files:
+    .github/workflows/haskell.yml
     .gitignore
-    .travis.yml
     appveyor.yml
-    cabal.project
     stack.yaml
     CHANGELOG.md
     README.md
-    design/proposal.md
     NOTICE
+    cabal.project.ci
+    design/proposal.md
 
 library
   ghc-options: -Wall
@@ -51,6 +51,7 @@ benchmark process-bench
   type: exitcode-stdio-1.0
   hs-source-dirs: Benchmark/System
   main-is: Process.hs
+  ghc-options: -O2 -fspec-constr-recursive=16 -fmax-worker-args=16
   build-depends:
       streamly-process
     , streamly          >= 0.7.1 && < 0.8
