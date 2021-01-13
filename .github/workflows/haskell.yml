@@ -76,10 +76,15 @@ jobs:
         cabal-version: ${{ matrix.cabal_version }}
 
     - uses: actions/cache@v1
-      name: Cache ~/.cabal
+      name: Restore cache ~/.cabal, ~/.stack, .stack-work, ~/.ghc, ~/.local
       with:
-        path: ~/.cabal
-        key: ${{ runner.os }}-${{ matrix.ghc_version }}-cabal
+        path: |
+          ~/.cabal
+          ~/.stack
+          .stack-work
+          ~/.ghc
+          ~/.local
+        key: ${{ runner.os }}-${{ matrix.name }}
 
     - name: Download packcheck
       run: |
