@@ -30,7 +30,16 @@ extra-source-files:
     design/proposal.md
 
 library
-  ghc-options: -Wall
+  ghc-options:
+                -Wall
+                -Wcompat
+                -Wunrecognised-warning-flags
+                -Widentities
+                -Wincomplete-record-updates
+                -Wincomplete-uni-patterns
+                -Wredundant-constraints
+                -Wnoncanonical-monad-instances
+
   hs-source-dirs: src
   build-depends:
       streamly          >= 0.7.1 && < 0.8
@@ -51,7 +60,7 @@ benchmark process-bench
   type: exitcode-stdio-1.0
   hs-source-dirs: Benchmark/System
   main-is: Process.hs
-  ghc-options: -O2 -fspec-constr-recursive=16 -fmax-worker-args=16
+  ghc-options: -O2 -fspec-constr-recursive=16 -fmax-worker-args=16 -threaded
   build-depends:
       streamly-process
     , streamly          >= 0.7.1 && < 0.8
@@ -71,6 +80,7 @@ test-suite system-process-test
   type: exitcode-stdio-1.0
   hs-source-dirs: test/Streamly/System
   main-is: Process.hs
+  ghc-options: -threaded
   build-depends:
       streamly-process
     , streamly          >= 0.7.1 && < 0.8
