@@ -65,7 +65,7 @@ instance Exception ProcessFailed where
 -- exit code, else peforms no action
 --
 -- @since 0.1.0.0
-exceptOnError :: (MonadIO m, MonadCatch m) => ProcessHandle -> m ()
+exceptOnError :: MonadIO m => ProcessHandle -> m ()
 exceptOnError procHandle = liftIO $ do
     exitCode <- waitForProcess procHandle
     case exitCode of
@@ -164,7 +164,7 @@ openProcInp fpath args = do
 -- @since 0.1.0.0
 {-# INLINE withInpExe #-}
 withInpExe ::
-    (IsStream t, MonadCatch m, MonadIO m, MonadAsync m)
+    (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> t m Word8            -- ^ Input stream to the process
@@ -228,7 +228,7 @@ openProcErr fpath args = do
 --
 -- @since 0.1.0.0
 withErrExe ::
-    (IsStream t, MonadCatch m, MonadIO m, MonadAsync m)
+    (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> Fold m Word8 b       -- ^ Fold to fold the error stream
@@ -302,7 +302,7 @@ toChunks fpath args = withExe fpath args FH.toChunks
 -- @since 0.1.0.0
 {-# INLINE transformBytes_ #-}
 transformBytes_ ::
-    (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
+    (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
     -> t m Word8    -- ^ Input Stream
@@ -323,7 +323,7 @@ transformBytes_ fpath args inStream =
 -- @since 0.1.0.0
 {-# INLINE transformChunks_ #-}
 transformChunks_ ::
-    (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
+    (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
     -> t m (Array Word8)    -- ^ Input Stream
@@ -345,7 +345,7 @@ transformChunks_ fpath args inStream =
 -- @since 0.1.0.0
 {-# INLINE transformBytes #-}
 transformBytes ::
-    (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
+    (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath         -- ^ Path to executable
     -> [String]         -- ^ Arguments to pass to executable
     -> Fold m Word8 b   -- ^ Fold to fold Error Stream
@@ -368,7 +368,7 @@ transformBytes fpath args fld inStream =
 -- @since 0.1.0.0
 {-# INLINE transformChunks #-}
 transformChunks ::
-    (IsStream t, MonadIO m, MonadCatch m, MonadAsync m)
+    (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath                 -- ^ Path to executable
     -> [String]                 -- ^ Arguments to pass to executable
     -> Fold m Word8 b           -- ^ Fold to fold Error Stream
