@@ -21,6 +21,7 @@ build-type:          Simple
 extra-source-files:
     .github/workflows/haskell.yml
     .gitignore
+    .hlint.yaml
     appveyor.yml
     stack.yaml
     CHANGELOG.md
