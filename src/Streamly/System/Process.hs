@@ -32,7 +32,6 @@ import System.Process
     , CreateProcess(..)
     , StdStream (..)
     , createProcess
-    , createPipe
     , proc
     , waitForProcess
     )
@@ -85,13 +84,13 @@ openProc ::
     -> IO (Handle, ProcessHandle)
     -- ^ Handle to read from output of process, process handle
 openProc fpath args = do
-    (readEnd, writeEnd) <- createPipe
     let procObj = (proc fpath args) {
-            std_out = UseHandle writeEnd,
-            close_fds = True
+            std_out = CreatePipe,
+            close_fds = True,
+            use_process_jobs = True
         }
 
-    (_, _, _, procHandle) <- createProcess procObj
+    (_, Just readEnd, _, procHandle) <- createProcess procObj
     return (readEnd, procHandle)
 
 -- |
@@ -140,15 +139,14 @@ openProcInp ::
     -> IO (Handle, Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Process Handle)
 openProcInp fpath args = do
-    (readInpEnd, writeInpEnd) <- createPipe
-    (readOutEnd, writeOutEnd) <- createPipe
     let procObj = (proc fpath args) {
-            std_in = UseHandle readInpEnd,
-            std_out = UseHandle writeOutEnd,
-            close_fds = True
+            std_in = CreatePipe,
+            std_out = CreatePipe,
+            close_fds = True,
+            use_process_jobs = True
         }
 
-    (_, _, _, procHandle) <- createProcess procObj
+    (Just writeInpEnd, Just readOutEnd, _, procHandle) <- createProcess procObj
     return (writeInpEnd, readOutEnd, procHandle)
 
 -- |
@@ -202,17 +200,16 @@ openProcErr ::
     -> IO (Handle, Handle, Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
 openProcErr fpath args = do
-    (readInpEnd, writeInpEnd) <- createPipe
-    (readOutEnd, writeOutEnd) <- createPipe
-    (readErrEnd, writeErrEnd) <- createPipe
     let procObj = (proc fpath args) {
-            std_in = UseHandle readInpEnd,
-            std_out = UseHandle writeOutEnd,
-            std_err = UseHandle writeErrEnd,
-            close_fds = True
+            std_in = CreatePipe,
+            std_out = CreatePipe,
+            std_err = CreatePipe,
+            close_fds = True,
+            use_process_jobs = True
         }
 
-    (_, _, _, procHandle) <- createProcess procObj
+    (Just writeInpEnd, Just readOutEnd, Just readErrEnd, procHandle) 
+        <- createProcess procObj
     return (writeInpEnd, readOutEnd, readErrEnd, procHandle)
 
 -- |

@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Main where
 
 import qualified Streamly.Internal.Prelude as S
@@ -18,11 +20,8 @@ import Test.QuickCheck
     ( forAll
     , choose
     , Property
-
     , listOf
-
     , counterexample
-
     )
 
 import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
@@ -85,21 +84,37 @@ arrayChunkElem :: Int
 arrayChunkElem = 100
 
 executableFile :: FilePath
+#if mingw32_HOST_OS == 1
+executableFile = "./writeTrToError.bat"
+#else
 executableFile = "./writeTrToError.sh"
+#endif
 
 executableFileContent :: String
+#if mingw32_HOST_OS == 1
+executableFileContent = "@echo off\r\ntr [a-z] [A-Z] >&2\r\n"
+#else
 executableFileContent =
-    "tr [a-z] [A-Z] <&0 >&2"
+    "tr [a-z] [A-Z] >&2"
+#endif
 
 executableFileFail :: FilePath
+#if mingw32_HOST_OS == 1
+executableFileFail = "./failExec.bat"
+#else
 executableFileFail = "./failExec.sh"
+#endif
 
 executableFileFailContent :: String
 executableFileFailContent =
     "exit 1"
 
 executableFilePass :: FilePath
+#if mingw32_HOST_OS == 1
+executableFilePass = "./passExec.bat"
+#else
 executableFilePass = "./passExec.sh"
+#endif
 
 executableFilePassContent :: String
 executableFilePassContent =
