@@ -7,19 +7,46 @@
 -- Portability : GHC
 --
 
+-- TODO:
+--
+-- 1) Provide a function "cmd :: String -> (FilePath, [String])" and change the
+-- signatures to something like "toBytes :: (FilePath, [String]) -> ...", so
+-- that we can use something like @toBytes (cmd "ls -al")@.
+--
+-- 2) Need a way to specify additional parameters for process creation.
+-- Possibly use something like @processBytesWith spec@ etc. Another way is to
+-- use a StateT like environment (shell environment).
+--
+-- 3) Need a way to access the pid and manage the processes and process groups.
+-- We can treat the processes in the same way as we treat threads. We can
+-- compose processes in parallel, and cleanup can happen in the same way as
+-- tids are cleaned up.
+--
+-- 4) Use unfolds for generation?
+--
+-- 5) Folds for composing process sinks? Input may be taken as input of the
+-- fold and the output of the process can be consumed by another fold.
+--
+-- 6) Replace FilePath with a typed path.
+--
+-- 7) iterateBytes API that feeds back the error to the input of the process.
+--
 {-# LANGUAGE FlexibleContexts #-}
 
 module Streamly.System.Process
-    ( ProcessFailed (..)
+    ( ProcessFailure (..)
+
+    -- * Generation
     , toBytes
     , toChunks
-    , transformBytes_
-    , transformChunks_
-    , transformBytes
-    , transformChunks
+
+    -- * Transformation
+    , processBytes
+    , processBytes_
+    , processChunks
+    , processChunks_
     )
 where
-
 
 import Control.Exception (Exception, displayException)
 import Control.Monad.Catch (MonadCatch, throwM)
@@ -44,23 +71,23 @@ import qualified Streamly.Internal.FileSystem.Handle as FH
 import qualified Streamly.Internal.Memory.ArrayStream as AS
 
 -- |
--- ProcessFailed exception which would be raised when process which
+-- ProcessFailure exception which would be raised when process which
 -- is made to run fails. The integer it contains is the exit code
 -- of the failed process
 --
 -- @since 0.1.0.0
-newtype ProcessFailed = ProcessFailed Int
+newtype ProcessFailure = ProcessFailure Int
     deriving Show
 
--- Exception instance of ProcessFailed
-instance Exception ProcessFailed where
+-- Exception instance of ProcessFailure
+instance Exception ProcessFailure where
 
-    displayException (ProcessFailed exitCodeInt) =
+    displayException (ProcessFailure exitCodeInt) =
         "Process Failed With Exit Code " ++ show exitCodeInt
 
 -- |
 -- Takes a process handle and waits for the process to exit, and then
--- raises 'ProcessFailed' exception if process failed with some
+-- raises 'ProcessFailure' exception if process failed with some
 -- exit code, else peforms no action
 --
 -- @since 0.1.0.0
@@ -69,7 +96,7 @@ exceptOnError procHandle = liftIO $ do
     exitCode <- waitForProcess procHandle
     case exitCode of
         ExitSuccess -> return ()
-        ExitFailure exitCodeInt -> throwM $ ProcessFailed exitCodeInt
+        ExitFailure exitCodeInt -> throwM $ ProcessFailure exitCodeInt
 
 -- |
 -- Creates a process using the path to executable and arguments, then
@@ -99,7 +126,7 @@ openProc fpath args = do
 -- generates a stream based on a function which takes the read end of the
 -- pipe and generates a stream
 --
--- Raises an exception 'ProcessFailed' if process failed due to some
+-- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
 -- @since 0.1.0.0
@@ -156,7 +183,7 @@ openProcInp fpath args = do
 -- a stream based on a function which takes the read end of the pipe and
 -- generates a stream.
 --
--- Raises an exception 'ProcessFailed' if process failed due to some
+-- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
 -- @since 0.1.0.0
@@ -208,7 +235,7 @@ openProcErr fpath args = do
             use_process_jobs = True
         }
 
-    (Just writeInpEnd, Just readOutEnd, Just readErrEnd, procHandle) 
+    (Just writeInpEnd, Just readOutEnd, Just readErrEnd, procHandle)
         <- createProcess procObj
     return (writeInpEnd, readOutEnd, readErrEnd, procHandle)
 
@@ -220,7 +247,7 @@ openProcErr fpath args = do
 -- output of the process and generates a stream based on a function which
 -- takes the read end of the pipe and generates a stream.
 --
--- Raises an exception 'ProcessFailed' if process failed due to some
+-- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
 -- @since 0.1.0.0
@@ -260,7 +287,7 @@ withErrExe fpath args fld input genStrm = S.bracket pre post body
 -- that are to be passed and returns the output of the process
 -- (standard output) in the form of a stream of Word8
 --
--- Raises an exception 'ProcessFailed' if process failed due to some
+-- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
 -- @since 0.1.0.0
@@ -277,7 +304,7 @@ toBytes fpath args = AS.concat $ withExe fpath args FH.toChunks
 -- that are to be passed and returns the output of the process
 -- (standard output) in the form of a stream of array of Word8
 --
--- Raises an exception 'ProcessFailed' if process failed due to some
+-- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
 -- @since 0.1.0.0
@@ -293,18 +320,18 @@ toChunks fpath args = withExe fpath args FH.toChunks
 -- that are to be passed and input to be provided to the process
 -- (standard input) and returns the output of the process (standard output).
 --
--- Raises an exception 'ProcessFailed' if process failed due to some
+-- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
 -- @since 0.1.0.0
-{-# INLINE transformBytes_ #-}
-transformBytes_ ::
+{-# INLINE processBytes_ #-}
+processBytes_ ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
     -> t m Word8    -- ^ Input Stream
     -> t m Word8    -- ^ Output Stream
-transformBytes_ fpath args inStream =
+processBytes_ fpath args inStream =
     AS.concat $ withInpExe fpath args inStream FH.toChunks
 
 -- |
@@ -314,18 +341,18 @@ transformBytes_ fpath args inStream =
 -- and returns the output of the process (standard output) in
 -- the form of a stream of array of Word8
 --
--- Raises an exception 'ProcessFailed' If process failed due to some
+-- Raises an exception 'ProcessFailure' If process failed due to some
 -- reason
 --
 -- @since 0.1.0.0
-{-# INLINE transformChunks_ #-}
-transformChunks_ ::
+{-# INLINE processChunks_ #-}
+processChunks_ ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
     -> t m (Array Word8)    -- ^ Input Stream
     -> t m (Array Word8)    -- ^ Output Stream
-transformChunks_ fpath args inStream =
+processChunks_ fpath args inStream =
     withInpExe fpath args (AS.concat inStream) FH.toChunks
 
 -- |
@@ -336,19 +363,19 @@ transformChunks_ fpath args inStream =
 -- the output of the process (standard output) in the form of a
 -- stream of Word8
 --
--- Raises an exception 'ProcessFailed' if process failed due to some
+-- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason. The Fold would continue if you would catch the thrown exception.
 --
 -- @since 0.1.0.0
-{-# INLINE transformBytes #-}
-transformBytes ::
+{-# INLINE processBytes #-}
+processBytes ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath         -- ^ Path to executable
     -> [String]         -- ^ Arguments to pass to executable
     -> Fold m Word8 b   -- ^ Fold to fold Error Stream
     -> t m Word8        -- ^ Input Stream
     -> t m Word8        -- ^ Output Stream
-transformBytes fpath args fld inStream =
+processBytes fpath args fld inStream =
     withErrExe fpath args fld inStream FH.toBytes
 
 -- |
@@ -359,17 +386,17 @@ transformBytes fpath args fld inStream =
 -- the output of the process (standard output) in the form of a
 -- array of Word8
 --
--- Raises an exception 'ProcessFailed' if process failed due to some
+-- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason. The Fold would continue if you would catch the thrown exception.
 --
 -- @since 0.1.0.0
-{-# INLINE transformChunks #-}
-transformChunks ::
+{-# INLINE processChunks #-}
+processChunks ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath                 -- ^ Path to executable
     -> [String]                 -- ^ Arguments to pass to executable
     -> Fold m Word8 b           -- ^ Fold to fold Error Stream
     -> t m (Array Word8)        -- ^ Input Stream
     -> t m (Array Word8)        -- ^ Output Stream
-transformChunks fpath args fld inStream =
+processChunks fpath args fld inStream =
     withErrExe fpath args fld (AS.concat inStream) FH.toChunks

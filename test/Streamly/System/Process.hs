@@ -7,7 +7,7 @@ import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.FileSystem.Handle as FH
 import qualified Streamly.Internal.Data.Fold as FL
 import qualified Streamly.Internal.Memory.ArrayStream as AS
-import Streamly.System.Process (ProcessFailed (..))
+import Streamly.System.Process (ProcessFailure (..))
 import Streamly.Internal.Data.Fold (Fold)
 
 import System.IO (IOMode(..), openFile, hClose)
@@ -219,7 +219,7 @@ toBytes2 = monadicIO $ run checkFailAction
         S.drain $ Proc.toBytes executableFileFail []
         return False
 
-    failAction (ProcessFailed exitCode) =
+    failAction (ProcessFailure exitCode) =
         return (exitCode == 1)
 
     checkFailAction = catch action failAction
@@ -252,19 +252,19 @@ toChunks2 = monadicIO $ run checkFailAction
         S.drain $ Proc.toChunks executableFileFail []
         return False
 
-    failAction (ProcessFailed exitCode) =
+    failAction (ProcessFailure exitCode) =
         return (exitCode == 1)
 
     checkFailAction = catch action failAction
 
-transformBytes_1 :: Property
-transformBytes_1 =
+processBytes_1 :: Property
+processBytes_1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
-                genStrm = Proc.transformBytes_
+                genStrm = Proc.processBytes_
                             trBinary
                             ["[a-z]", "[A-Z]"]
                             inputStream
@@ -274,26 +274,26 @@ transformBytes_1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-transformBytes_2 :: Property
-transformBytes_2 = monadicIO $ run checkFailAction
+processBytes_2 :: Property
+processBytes_2 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.transformBytes_ executableFileFail [] S.nil
+        S.drain $ Proc.processBytes_ executableFileFail [] S.nil
         return False
 
-    failAction (ProcessFailed exitCode) =
+    failAction (ProcessFailure exitCode) =
         return (exitCode == 1)
 
     checkFailAction = catch action failAction
 
-transformBytes_3 :: Property
-transformBytes_3 = monadicIO $ run checkFailAction
+processBytes_3 :: Property
+processBytes_3 = monadicIO $ run checkFailAction
     where
 
     action = do
         S.drain $
-            Proc.transformBytes_
+            Proc.processBytes_
             executableFilePass
             []
             (S.nilM $ throwM (SimpleError failErrorMessage))
@@ -304,8 +304,8 @@ transformBytes_3 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-transformChunks_1 :: Property
-transformChunks_1 =
+processChunks_1 :: Property
+processChunks_1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             trBinary <- run ioTrBinary
@@ -313,7 +313,7 @@ transformChunks_1 =
                 inputStream = S.fromList ls
 
                 genStrm = AS.concat $
-                    Proc.transformChunks_
+                    Proc.processChunks_
                     trBinary
                     ["[a-z]", "[A-Z]"]
                     (AS.arraysOf arrayChunkElem inputStream)
@@ -324,26 +324,26 @@ transformChunks_1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-transformChunks_2 :: Property
-transformChunks_2 = monadicIO $ run checkFailAction
+processChunks_2 :: Property
+processChunks_2 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.transformChunks_ executableFileFail [] S.nil
+        S.drain $ Proc.processChunks_ executableFileFail [] S.nil
         return False
 
-    failAction (ProcessFailed exitCode) =
+    failAction (ProcessFailure exitCode) =
         return (exitCode == 1)
 
     checkFailAction = catch action failAction
 
-transformChunks_3 :: Property
-transformChunks_3 = monadicIO $ run checkFailAction
+processChunks_3 :: Property
+processChunks_3 = monadicIO $ run checkFailAction
     where
 
     action = do
         S.drain $
-            Proc.transformChunks_
+            Proc.processChunks_
             executableFilePass
             []
             (S.nilM $ throwM (SimpleError failErrorMessage))
@@ -354,14 +354,14 @@ transformChunks_3 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-transformBytes1 :: Property
-transformBytes1 =
+processBytes1 :: Property
+processBytes1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
-                genStrm = Proc.transformBytes
+                genStrm = Proc.processBytes
                             trBinary
                             ["[a-z]", "[A-Z]"]
                             FL.drain inputStream
@@ -371,15 +371,15 @@ transformBytes1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-transformBytes2 :: Property
-transformBytes2 =
+processBytes2 :: Property
+processBytes2 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             listIoRef <- run $ newIORef []
             let
                 inputStream = S.fromList ls
                 outStream =
-                    Proc.transformBytes
+                    Proc.processBytes
                     executableFile
                     ["[a-z]", "[A-Z]"]
                     (writeToIoRefFold listIoRef)
@@ -392,26 +392,26 @@ transformBytes2 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-transformBytes3 :: Property
-transformBytes3 = monadicIO $ run checkFailAction
+processBytes3 :: Property
+processBytes3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.transformBytes executableFileFail [] FL.drain S.nil
+        S.drain $ Proc.processBytes executableFileFail [] FL.drain S.nil
         return False
 
-    failAction (ProcessFailed exitCode) =
+    failAction (ProcessFailure exitCode) =
         return (exitCode == 1)
 
     checkFailAction = catch action failAction
 
-transformBytes4 :: Property
-transformBytes4 = monadicIO $ run checkFailAction
+processBytes4 :: Property
+processBytes4 = monadicIO $ run checkFailAction
     where
 
     action = do
         S.drain $
-            Proc.transformBytes
+            Proc.processBytes
             executableFilePass
             []
             FL.drain
@@ -423,8 +423,8 @@ transformBytes4 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-transformChunks1 :: Property
-transformChunks1 =
+processChunks1 :: Property
+processChunks1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             trBinary <- run ioTrBinary
@@ -432,7 +432,7 @@ transformChunks1 =
                 inputStream = S.fromList ls
 
                 genStrm = AS.concat $
-                    Proc.transformChunks
+                    Proc.processChunks
                     trBinary
                     ["[a-z]", "[A-Z]"]
                     FL.drain
@@ -444,15 +444,15 @@ transformChunks1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-transformChunks2 :: Property
-transformChunks2 =
+processChunks2 :: Property
+processChunks2 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             listIoRef <- run $ newIORef []
             let
                 inputStream = S.fromList ls
                 outStream =
-                    Proc.transformChunks
+                    Proc.processChunks
                     executableFile
                     ["[a-z]", "[A-Z]"]
                     (writeToIoRefFold listIoRef)
@@ -465,26 +465,26 @@ transformChunks2 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-transformChunks3 :: Property
-transformChunks3 = monadicIO $ run checkFailAction
+processChunks3 :: Property
+processChunks3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.transformChunks executableFileFail [] FL.drain S.nil
+        S.drain $ Proc.processChunks executableFileFail [] FL.drain S.nil
         return False
 
-    failAction (ProcessFailed exitCode) =
+    failAction (ProcessFailure exitCode) =
         return (exitCode == 1)
 
     checkFailAction = catch action failAction
 
-transformChunks4 :: Property
-transformChunks4 = monadicIO $ run checkFailAction
+processChunks4 :: Property
+processChunks4 = monadicIO $ run checkFailAction
     where
 
     action = do
         S.drain $
-            Proc.transformChunks
+            Proc.processChunks
             executableFilePass
             []
             FL.drain
@@ -505,26 +505,26 @@ main = do
             prop "toBytes on failing executable" toBytes2
             prop "toChunks cat = FH.toChunks" toChunks1
             prop "toChunks on failing executable" toChunks2
-            prop "transformBytes_ tr = map toUpper" transformBytes_1
-            prop "transformBytes_ on failing executable" transformBytes_2
-            prop "transformBytes_ using error stream" transformBytes_3
+            prop "processBytes_ tr = map toUpper" processBytes_1
+            prop "processBytes_ on failing executable" processBytes_2
+            prop "processBytes_ using error stream" processBytes_3
             prop
-                "AS.concat $ transformChunks_ tr = map toUpper"
-                transformChunks_1
-            prop "transformChunks_ on failing executable" transformChunks_2
-            prop "transformChunks_ using error stream" transformChunks_3
-            prop "transformBytes tr = map toUpper" transformBytes1
+                "AS.concat $ processChunks_ tr = map toUpper"
+                processChunks_1
+            prop "processChunks_ on failing executable" processChunks_2
+            prop "processChunks_ using error stream" processChunks_3
+            prop "processBytes tr = map toUpper" processBytes1
             prop
-                "error stream of transformBytes tr = map toUpper"
-                transformBytes2
-            prop "transformBytes on failing executable" transformBytes3
-            prop "transformBytes using error stream" transformBytes4
+                "error stream of processBytes tr = map toUpper"
+                processBytes2
+            prop "processBytes on failing executable" processBytes3
+            prop "processBytes using error stream" processBytes4
             prop
-                "AS.concat $ transformChunks tr = map toUpper"
-                transformChunks1
+                "AS.concat $ processChunks tr = map toUpper"
+                processChunks1
             prop
-                "error stream of transformChunks tr = map toUpper"
-                transformChunks2
-            prop "transformChunks on failing executable" transformChunks3
-            prop "transformChunks using error stream" transformChunks4
+                "error stream of processChunks tr = map toUpper"
+                processChunks2
+            prop "processChunks on failing executable" processChunks3
+            prop "processChunks using error stream" processChunks4
     removeExecutables
