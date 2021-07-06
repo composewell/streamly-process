@@ -30,7 +30,7 @@ import Control.Monad (unless)
 import Control.Monad.Catch (throwM, catch)
 import Control.Exception (Exception)
 
-import Data.IORef (IORef (..), newIORef, readIORef, writeIORef)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List ((\\))
 import Data.Word (Word8)
 

@@ -1,36 +1,26 @@
 module Main where
 
-import qualified Streamly.Internal.Prelude as S
-import qualified Streamly.System.Process as Proc
-import qualified Streamly.Internal.FileSystem.Handle as FH
-import qualified Streamly.Internal.Data.Fold as FL
-
-import System.IO
-    ( FilePath
-    , Handle
-    , IOMode(..)
-    , openFile
-    , hClose
-    , stdout
-    , writeFile
-    )
-import System.Process (proc, createProcess, waitForProcess, callCommand)
-import System.Directory (removeFile, findExecutable)
-
-import Control.Monad (replicateM_)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-
-import Data.IORef (IORef (..), newIORef, readIORef, writeIORef)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Word (Word8)
-
 import Gauge
     ( Benchmarkable
     , defaultMain
     , bench
-    , nfIO
     , perRunEnv
-    , perRunEnvWithCleanup
     )
+import System.Directory (removeFile, findExecutable)
+import System.IO
+    ( Handle
+    , IOMode(..)
+    , openFile
+    , hClose
+    )
+import System.Process (proc, createProcess, waitForProcess, callCommand)
+
+import qualified Streamly.Internal.Prelude as S
+import qualified Streamly.System.Process as Proc
+import qualified Streamly.Internal.FileSystem.Handle as FH
+import qualified Streamly.Internal.Data.Fold as FL
 
 _a :: Word8
 _a = 97
@@ -101,7 +91,7 @@ generateByteFile =
                 ]
 
         (_, _, _, procHandle) <- createProcess procObj
-        waitForProcess procHandle
+        _ <- waitForProcess procHandle
         return ()
 
 generateCharFile :: IO ()
@@ -182,7 +172,6 @@ processChunks1 (inputHdl, outputHdl) = do
 
 processChunks2 :: (Handle, Handle) -> IO ()
 processChunks2 (inputHdl, outputHdl) = do
-    trBinary <- ioTrBinary
     FH.fromChunks outputHdl $
         Proc.processChunks
             executableFile
