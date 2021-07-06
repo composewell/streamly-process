@@ -52,6 +52,9 @@ import Control.Exception (Exception, displayException)
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Word (Word8)
+import Streamly.Data.Array.Foreign (Array)
+import Streamly.Data.Fold (Fold)
+import Streamly.Prelude (MonadAsync, parallel, IsStream, adapt)
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
 import System.Process
@@ -63,12 +66,13 @@ import System.Process
     , waitForProcess
     )
 
-import Streamly.Data.Fold (Fold)
-import Streamly.Memory.Array (Array)
-import Streamly (MonadAsync, parallel, IsStream, adapt)
-import qualified Streamly.Internal.Prelude as S
-import qualified Streamly.Internal.FileSystem.Handle as FH
-import qualified Streamly.Internal.Memory.ArrayStream as AS
+import qualified Streamly.Prelude as S
+
+-- Internal imports
+import qualified Streamly.Internal.Data.Array.Stream.Foreign as AS (concat)
+import qualified Streamly.Internal.Data.Stream.IsStream as S (nilM)
+import qualified Streamly.Internal.FileSystem.Handle
+    as FH (toBytes, toChunks, putBytes)
 
 -- |
 -- ProcessFailure exception which would be raised when process which
@@ -132,7 +136,7 @@ openProc fpath args = do
 -- @since 0.1.0.0
 {-# INLINE withExe #-}
 withExe ::
-        (IsStream t, MonadCatch m, MonadIO m)
+        (IsStream t, MonadAsync m, MonadCatch m)
         => FilePath          -- ^ Path to Executable
         -> [String]          -- ^ Arguments
         -> (Handle -> t m a)
@@ -189,7 +193,7 @@ openProcInp fpath args = do
 -- @since 0.1.0.0
 {-# INLINE withInpExe #-}
 withInpExe ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (IsStream t, MonadAsync m, MonadCatch m)
     => FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> t m Word8            -- ^ Input stream to the process
@@ -201,7 +205,7 @@ withInpExe fpath args input genStrm = S.bracket pre post body
     where
 
     writeAction writeHdl =
-        FH.fromBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
+        FH.putBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
 
     pre = liftIO $ openProcInp fpath args
 
@@ -265,7 +269,7 @@ withErrExe fpath args fld input genStrm = S.bracket pre post body
     where
 
     writeAction writeHdl =
-        FH.fromBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
+        FH.putBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
 
     foldErrAction errorHdl =
         S.fold fld (FH.toBytes errorHdl) >> liftIO (hClose errorHdl)
@@ -293,7 +297,7 @@ withErrExe fpath args fld input genStrm = S.bracket pre post body
 -- @since 0.1.0.0
 {-# INLINE toBytes #-}
 toBytes ::
-    (IsStream t, MonadIO m, MonadCatch m)
+    (IsStream t, MonadAsync m, MonadCatch m)
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
     -> t m Word8    -- ^ Output Stream
@@ -309,7 +313,7 @@ toBytes fpath args = AS.concat $ withExe fpath args FH.toChunks
 --
 -- @since 0.1.0.0
 toChunks ::
-    (IsStream t, MonadIO m, MonadCatch m)
+    (IsStream t, MonadAsync m, MonadCatch m)
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
     -> t m (Array Word8)    -- ^ Output Stream

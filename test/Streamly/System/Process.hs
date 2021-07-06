@@ -2,19 +2,19 @@
 
 module Main where
 
-import qualified Streamly.Internal.Prelude as S
-import qualified Streamly.System.Process as Proc
-import qualified Streamly.Internal.FileSystem.Handle as FH
-import qualified Streamly.Internal.Data.Fold as FL
-import qualified Streamly.Internal.Memory.ArrayStream as AS
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.List ((\\))
+import Data.Word (Word8)
+import Control.Exception (Exception)
+import Control.Monad (unless)
+import Control.Monad.Catch (throwM, catch)
+import Control.Monad.IO.Class (MonadIO(..))
+import Streamly.Data.Fold (Fold)
 import Streamly.System.Process (ProcessFailure (..))
-import Streamly.Internal.Data.Fold (Fold)
-
+import System.Directory (removeFile, findExecutable)
 import System.IO (IOMode(..), openFile, hClose)
 import System.Process (callCommand)
-import System.Directory (removeFile, findExecutable)
-
-import Test.Hspec(hspec, describe)
+import Test.Hspec (hspec, describe)
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
     ( forAll
@@ -23,16 +23,17 @@ import Test.QuickCheck
     , listOf
     , counterexample
     )
-
 import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
-import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad (unless)
-import Control.Monad.Catch (throwM, catch)
-import Control.Exception (Exception)
 
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
-import Data.List ((\\))
-import Data.Word (Word8)
+import qualified Streamly.Data.Fold as FL
+import qualified Streamly.Prelude as S
+import qualified Streamly.System.Process as Proc
+
+-- Internal imports
+import qualified Streamly.Internal.Data.Array.Stream.Foreign
+    as AS (arraysOf, concat)
+import qualified Streamly.Internal.Data.Stream.IsStream as S (nilM)
+import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, toBytes)
 
 newtype SimpleError = SimpleError String
     deriving Show
@@ -167,14 +168,14 @@ charFile = "./largeCharFile"
 generateCharFile :: Int -> IO ()
 generateCharFile numCharInCharFile = do
     handle <- openFile charFile WriteMode
-    FH.fromBytes handle (S.replicate numCharInCharFile _a)
+    FH.putBytes handle (S.replicate numCharInCharFile _a)
     hClose handle
 
 writeToIoRefFold ::
     MonadIO m
     => IORef [Word8]
     -> Fold m Word8 ()
-writeToIoRefFold ioRef = FL.Fold step initial extract
+writeToIoRefFold ioRef = FL.rmapM extract (FL.foldlM' step initial)
 
     where
 

@@ -60,7 +60,8 @@ library
   build-depends:
       base              >= 4.8   && < 5
     , process           >= 1.0   && < 1.7
-    , streamly          >= 0.7.1 && < 0.8
+    -- Uses internal APIs
+    , streamly          >= 0.8   && < 0.8.1
     , exceptions        >= 0.8   && < 0.11
 
 -------------------------------------------------------------------------------
@@ -82,7 +83,8 @@ benchmark Benchmark.System.Process
     , directory         >= 1.2.2 && < 1.4
     , gauge             >= 0.2.4 && < 0.3
     , process           >= 1.0   && < 1.7
-    , streamly          >= 0.7.1 && < 0.8
+    -- Uses internal APIs
+    , streamly          >= 0.8   && < 0.8.1
 
 -------------------------------------------------------------------------------
 -- Test Suites
@@ -100,4 +102,5 @@ test-suite Test.System.Process
     , hspec             >= 2.0   && < 3
     , process           >= 1.0   && < 1.7
     , QuickCheck        >= 2.10  && < 2.15
-    , streamly          >= 0.7.1 && < 0.8
+    -- Uses internal APIs
+    , streamly          >= 0.8   && < 0.8.1

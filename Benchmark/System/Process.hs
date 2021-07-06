@@ -17,10 +17,13 @@ import System.IO
     )
 import System.Process (proc, createProcess, waitForProcess, callCommand)
 
-import qualified Streamly.Internal.Prelude as S
+import qualified Streamly.Prelude as S
 import qualified Streamly.System.Process as Proc
-import qualified Streamly.Internal.FileSystem.Handle as FH
-import qualified Streamly.Internal.Data.Fold as FL
+import qualified Streamly.Data.Fold as FL
+
+-- Internal imports
+import qualified Streamly.Internal.FileSystem.Handle
+    as FH (toBytes, toChunks, putBytes, putChunks)
 
 _a :: Word8
 _a = 97
@@ -97,7 +100,7 @@ generateByteFile =
 generateCharFile :: IO ()
 generateCharFile = do
     handle <- openFile largeCharFile WriteMode
-    FH.fromBytes handle (S.replicate numCharInCharFile _a)
+    FH.putBytes handle (S.replicate numCharInCharFile _a)
     hClose handle
 
 generateFiles :: IO ()
@@ -115,18 +118,18 @@ deleteFiles = do
 toBytes :: Handle -> IO ()
 toBytes hdl = do
     catBinary <- ioCatBinary
-    FH.fromBytes hdl $ Proc.toBytes catBinary [largeByteFile]
+    FH.putBytes hdl $ Proc.toBytes catBinary [largeByteFile]
 
 toChunks :: Handle -> IO ()
 toChunks hdl = do
     catBinary <- ioCatBinary
-    FH.fromChunks hdl $
+    FH.putChunks hdl $
         Proc.toChunks catBinary [largeByteFile]
 
 processBytes_ :: (Handle, Handle) -> IO ()
 processBytes_ (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
-    FH.fromBytes outputHdl $
+    FH.putBytes outputHdl $
         Proc.processBytes_
             trBinary
             ["[a-z]", "[A-Z]"]
@@ -135,7 +138,7 @@ processBytes_ (inputHdl, outputHdl) = do
 processChunks_ :: (Handle, Handle) -> IO ()
 processChunks_ (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
-    FH.fromChunks outputHdl $
+    FH.putChunks outputHdl $
         Proc.processChunks_
             trBinary
             ["[a-z]", "[A-Z]"]
@@ -144,7 +147,7 @@ processChunks_ (inputHdl, outputHdl) = do
 processBytes1 :: (Handle, Handle) -> IO ()
 processBytes1 (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
-    FH.fromBytes outputHdl $
+    FH.putBytes outputHdl $
         Proc.processBytes
             trBinary
             ["[a-z]", "[A-Z]"]
@@ -153,7 +156,7 @@ processBytes1 (inputHdl, outputHdl) = do
 
 processBytes2 :: (Handle, Handle) -> IO ()
 processBytes2 (inputHdl, outputHdl) =
-    FH.fromBytes outputHdl $
+    FH.putBytes outputHdl $
         Proc.processBytes
             executableFile
             ["[a-z]", "[A-Z]"]
@@ -163,7 +166,7 @@ processBytes2 (inputHdl, outputHdl) =
 processChunks1 :: (Handle, Handle) -> IO ()
 processChunks1 (inputHdl, outputHdl) = do
     trBinary <- ioTrBinary
-    FH.fromChunks outputHdl $
+    FH.putChunks outputHdl $
         Proc.processChunks
             trBinary
             ["[a-z]", "[A-Z]"]
@@ -172,7 +175,7 @@ processChunks1 (inputHdl, outputHdl) = do
 
 processChunks2 :: (Handle, Handle) -> IO ()
 processChunks2 (inputHdl, outputHdl) = do
-    FH.fromChunks outputHdl $
+    FH.putChunks outputHdl $
         Proc.processChunks
             executableFile
             ["[a-z]", "[A-Z]"]
