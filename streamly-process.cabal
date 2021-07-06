@@ -3,8 +3,8 @@ name:                streamly-process
 version:             0.1.0.0
 synopsis:            Streaming interfaces for system processes
 description:
-  Connect system processes with Haskell functions or with each other
-  like Unix pipes using streamly streams.
+  Connect system processes with Haskell functions or with each other,
+  like Unix pipes, using streams.
 homepage:            https://streamly.composewell.com
 bug-reports:         https://github.com/composewell/streamly-process/issues
 license:             Apache-2.0
