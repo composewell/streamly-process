@@ -79,7 +79,7 @@ import qualified Streamly.Internal.FileSystem.Handle
 -- is made to run fails. The integer it contains is the exit code
 -- of the failed process
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 newtype ProcessFailure = ProcessFailure Int
     deriving Show
 
@@ -94,7 +94,7 @@ instance Exception ProcessFailure where
 -- raises 'ProcessFailure' exception if process failed with some
 -- exit code, else peforms no action
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 exceptOnError :: MonadIO m => ProcessHandle -> m ()
 exceptOnError procHandle = liftIO $ do
     exitCode <- waitForProcess procHandle
@@ -107,7 +107,7 @@ exceptOnError procHandle = liftIO $ do
 -- connects a pipe's write end with output of the process, and
 -- returns the read end's handle and the process handle of the process
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 {-# INLINE openProc #-}
 openProc ::
     FilePath                        -- ^ Path to Executable
@@ -133,7 +133,7 @@ openProc fpath args = do
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 {-# INLINE withExe #-}
 withExe ::
         (IsStream t, MonadAsync m, MonadCatch m)
@@ -162,7 +162,7 @@ withExe fpath args genStrm = S.bracket pre post body
 -- process's input, handle to read end to process's output and
 -- process handle of the process
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 {-# INLINE openProcInp #-}
 openProcInp ::
     FilePath                                -- ^ Path to Executable
@@ -190,7 +190,7 @@ openProcInp fpath args = do
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 {-# INLINE withInpExe #-}
 withInpExe ::
     (IsStream t, MonadAsync m, MonadCatch m)
@@ -224,7 +224,7 @@ withInpExe fpath args input genStrm = S.bracket pre post body
 -- to read end to process's output, handle to read end to process's standard
 -- error and process handle of the process
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 openProcErr ::
     FilePath                                -- ^ Path to Executable
     -> [String]                             -- ^ Arguments
@@ -254,7 +254,7 @@ openProcErr fpath args = do
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 withErrExe ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to Executable
@@ -294,7 +294,7 @@ withErrExe fpath args fld input genStrm = S.bracket pre post body
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 {-# INLINE toBytes #-}
 toBytes ::
     (IsStream t, MonadAsync m, MonadCatch m)
@@ -311,7 +311,7 @@ toBytes fpath args = AS.concat $ withExe fpath args FH.toChunks
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 toChunks ::
     (IsStream t, MonadAsync m, MonadCatch m)
     => FilePath             -- ^ Path to executable
@@ -327,7 +327,7 @@ toChunks fpath args = withExe fpath args FH.toChunks
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 {-# INLINE processBytes_ #-}
 processBytes_ ::
     (IsStream t, MonadCatch m, MonadAsync m)
@@ -348,7 +348,7 @@ processBytes_ fpath args inStream =
 -- Raises an exception 'ProcessFailure' If process failed due to some
 -- reason
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 {-# INLINE processChunks_ #-}
 processChunks_ ::
     (IsStream t, MonadCatch m, MonadAsync m)
@@ -370,7 +370,7 @@ processChunks_ fpath args inStream =
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason. The Fold would continue if you would catch the thrown exception.
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 {-# INLINE processBytes #-}
 processBytes ::
     (IsStream t, MonadCatch m, MonadAsync m)
@@ -393,7 +393,7 @@ processBytes fpath args fld inStream =
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason. The Fold would continue if you would catch the thrown exception.
 --
--- @since 0.1.0.0
+-- @since 0.1.0
 {-# INLINE processChunks #-}
 processChunks ::
     (IsStream t, MonadCatch m, MonadAsync m)
