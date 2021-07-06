@@ -1,4 +1,13 @@
-name: Haskell CI
+# packcheck-0.5.1
+# You can use any of the options supported by packcheck as environment
+# variables here.  See https://github.com/composewell/packcheck for all
+# options and their explanation.
+
+name: packcheck
+
+#-----------------------------------------------------------------------------
+# Events on which the build should be triggered
+#-----------------------------------------------------------------------------
 
 on:
   push:
@@ -6,31 +15,41 @@ on:
       - master
   pull_request:
 
+
+#-----------------------------------------------------------------------------
+# Build matrix
+#-----------------------------------------------------------------------------
+
 jobs:
   build:
-    name: GHC ${{ matrix.name }}
+    name: >-
+      ${{ matrix.name }}
+      ${{ matrix.command }}
+      ${{ matrix.runner }}
+      ${{ matrix.ghc_version }}
     env:
+      # ------------------------------------------------------------------------
+      # Common options
+      # ------------------------------------------------------------------------
+      # GHC_OPTIONS: "-Werror"
       CABAL_REINIT_CONFIG: y
       LC_ALL: C.UTF-8
-
-      ENABLE_INSTALL: "n"
 
       STACK_UPGRADE: "y"
 
       CABAL_CHECK_RELAX: y
-      CABAL_NO_SANDBOX: y
       CABAL_HACKAGE_MIRROR: hackage.haskell.org:http://hackage.fpcomplete.com
 
       PACKCHECK_LOCAL_PATH: "./packcheck.sh"
-      PACKCHECK_GITHUB_URL: "https://raw.githubusercontent.com/harendra-kumar/packcheck"
-      PACKCHECK_GITHUB_COMMIT: "563702bd02c41343dcd3dfcfef0845ca428a9240"
+      PACKCHECK_GITHUB_URL: "https://raw.githubusercontent.com/composewell/packcheck"
+      PACKCHECK_GITHUB_COMMIT: "37bbe8a79ad5136e654e48e03ec519060a5b11e6"
 
       BUILD: ${{ matrix.build }}
       GHCVER: ${{ matrix.ghc_version }}
-      RESOLVER: ${{ matrix.resolver }}
-      CABAL_BUILD_OPTIONS: ${{ matrix.cabal_build_options }}
+      #RESOLVER: ${{ matrix.resolver }}
+      #CABAL_BUILD_OPTIONS: ${{ matrix.cabal_build_options }}
       CABAL_PROJECT: ${{ matrix.cabal_project }}
-      DISABLE_DOCS: ${{ matrix.disable_docs }}
+      #DISABLE_DOCS: ${{ matrix.disable_docs }}
       DISABLE_SDIST_BUILD: ${{ matrix.disable_sdist_build }}
       HLINT_OPTIONS: ${{ matrix.hlint_options }}
       HLINT_TARGETS: ${{ matrix.hlint_targets }}
@@ -39,29 +58,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        name: [8.10.2+macOS, 8.8.3+Werror, 8.6.5+stack, 8.4.4, Hlint]
-        cabal_version: ["3.2"]
         include:
-          - name: 8.10.2+macOS
-            ghc_version: 8.10.2
+          - name: 8.10.4+sdist # sdist with cabal.project
+            ghc_version: 8.10.4
+            build: cabal-v2
+            runner: ubuntu-latest
+          - name: 8.10.4+Werror
+            ghc_version: 8.10.4
+            build: cabal-v2
+            cabal_project: cabal.project.Werror
+            runner: ubuntu-latest
+          - name: 8.10.4+macOS
+            ghc_version: 8.10.4
             build: cabal-v2
             disable_sdist_build: "y"
             runner: macos-latest
-          - name: 8.8.3+Werror
-            ghc_version: 8.8.3
+          - name: 8.8.4
+            ghc_version: 8.8.4
             build: cabal-v2
-            cabal_project: cabal.project.ci
             runner: ubuntu-latest
-          - name: 8.6.5+stack
+          - name: 8.6.5
             ghc_version: 8.6.5
-            resolver: lts-14.27
-            build: stack
+            build: cabal-v2
             runner: ubuntu-latest
           - name: 8.4.4
             ghc_version: 8.4.4
             build: cabal-v2
             runner: ubuntu-latest
-          - name: Hlint
+          - name: hlint
             build: cabal-v2
             hlint_options: "lint"
             hlint_targets: "src test Benchmark"
@@ -71,9 +95,10 @@ jobs:
     - uses: actions/checkout@v2
 
     - uses: haskell/actions/setup@v1
+      if: ${{ matrix.name != 'hlint' }}
       with:
         ghc-version: ${{ matrix.ghc_version }}
-        cabal-version: ${{ matrix.cabal_version }}
+        cabal-version: 3.2
 
     - uses: actions/cache@v1
       name: Restore cache ~/.cabal, ~/.stack, .stack-work, ~/.ghc, ~/.local
