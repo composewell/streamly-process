@@ -70,13 +70,14 @@ import System.Process
     , waitForProcess
     )
 
-import qualified Streamly.Prelude as S
+import qualified Streamly.Prelude as Stream
 
 -- Internal imports
-import qualified Streamly.Internal.Data.Array.Stream.Foreign as AS (concat)
-import qualified Streamly.Internal.Data.Stream.IsStream as S (nilM)
+import qualified Streamly.Internal.Data.Array.Stream.Foreign
+    as ArrayStream (concat)
+import qualified Streamly.Internal.Data.Stream.IsStream as Stream (nilM)
 import qualified Streamly.Internal.FileSystem.Handle
-    as FH (toBytes, toChunks, putBytes)
+    as Handle (toBytes, toChunks, putBytes)
 
 -- $setup
 -- >>> import qualified Streamly.Console.Stdio as Stdio
@@ -146,7 +147,7 @@ withExe ::
         -- ^ Given handle to read from output of
         -- process generate stream output
         -> t m a             -- ^ Stream produced
-withExe fpath args genStrm = S.bracket pre post body
+withExe fpath args genStrm = Stream.bracket pre post body
 
     where
 
@@ -201,12 +202,12 @@ withInpExe ::
     -> (Handle -> t m a)
     -- ^ Handle to read output of process and generate stream
     -> t m a                -- ^ Stream produced
-withInpExe fpath args input genStrm = S.bracket pre post body
+withInpExe fpath args input genStrm = Stream.bracket pre post body
 
     where
 
     writeAction writeHdl =
-        FH.putBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
+        Handle.putBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
 
     pre = liftIO $ openProcInp fpath args
 
@@ -214,7 +215,7 @@ withInpExe fpath args input genStrm = S.bracket pre post body
         liftIO $ hClose readHdl >> exceptOnError procHandle
 
     body (writeHdl, readHdl, _) =
-        parallel (S.nilM $ writeAction writeHdl) (genStrm readHdl)
+        parallel (Stream.nilM $ writeAction writeHdl) (genStrm readHdl)
 
 -- |
 -- Creates a process using the path to executable and arguments, then
@@ -262,19 +263,19 @@ withErrExe ::
     -> t m Word8            -- ^ Input stream to the process
     -> (Handle -> t m a)    -- ^ Output stream generator
     -> t m a                -- ^ Stream produced
-withErrExe fpath args fld input genStrm = S.bracket pre post body
+withErrExe fpath args fld input genStrm = Stream.bracket pre post body
 
     where
 
     writeAction writeHdl =
-        FH.putBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
+        Handle.putBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
 
     foldErrAction errorHdl =
-        S.fold fld (FH.toBytes errorHdl) >> liftIO (hClose errorHdl)
+        Stream.fold fld (Handle.toBytes errorHdl) >> liftIO (hClose errorHdl)
 
     runActions writeHdl errorHdl = parallel
-        (S.nilM $ writeAction writeHdl)
-        (S.nilM $ foldErrAction errorHdl)
+        (Stream.nilM $ writeAction writeHdl)
+        (Stream.nilM $ foldErrAction errorHdl)
 
     pre = liftIO $ openProcErr fpath args
 
@@ -303,7 +304,7 @@ toBytes ::
     => FilePath     -- ^ Executable path
     -> [String]     -- ^ Arguments
     -> t m Word8    -- ^ Output Stream
-toBytes fpath args = AS.concat $ withExe fpath args FH.toChunks
+toBytes fpath args = ArrayStream.concat $ withExe fpath args Handle.toChunks
 
 -- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
 -- of @Word8@.
@@ -320,7 +321,7 @@ toChunks ::
     => FilePath             -- ^ Executable path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Output Stream
-toChunks fpath args = withExe fpath args FH.toChunks
+toChunks fpath args = withExe fpath args Handle.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
@@ -339,7 +340,7 @@ processBytes_ ::
     -> t m Word8    -- ^ Input Stream
     -> t m Word8    -- ^ Output Stream
 processBytes_ fpath args inStream =
-    AS.concat $ withInpExe fpath args inStream FH.toChunks
+    ArrayStream.concat $ withInpExe fpath args inStream Handle.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
@@ -360,7 +361,7 @@ processChunks_ ::
     -> t m (Array Word8)    -- ^ Input Stream
     -> t m (Array Word8)    -- ^ Output Stream
 processChunks_ fpath args inStream =
-    withInpExe fpath args (AS.concat inStream) FH.toChunks
+    withInpExe fpath args (ArrayStream.concat inStream) Handle.toChunks
 
 -- | @processBytes path args errAccum input@ runs the executable at @path@
 -- using @args@ as arguments and @input@ stream as its standard input.  The
@@ -403,7 +404,7 @@ processBytes ::
     -> t m Word8        -- ^ Input Stream
     -> t m Word8        -- ^ Output Stream
 processBytes fpath args fld inStream =
-    withErrExe fpath args fld inStream FH.toBytes
+    withErrExe fpath args fld inStream Handle.toBytes
 
 -- |
 -- Runs a process specified by the path to executable, arguments
@@ -426,4 +427,4 @@ processChunks ::
     -> t m (Array Word8)        -- ^ Input Stream
     -> t m (Array Word8)        -- ^ Output Stream
 processChunks fpath args fld inStream =
-    withErrExe fpath args fld (AS.concat inStream) FH.toChunks
+    withErrExe fpath args fld (ArrayStream.concat inStream) Handle.toChunks
