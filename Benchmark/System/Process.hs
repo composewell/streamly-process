@@ -1,13 +1,9 @@
-module Main where
+{-# LANGUAGE  ScopedTypeVariables #-}
+module Main (main) where
 
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Control.Exception (finally)
 import Data.Word (Word8)
-import Gauge
-    ( Benchmarkable
-    , defaultMain
-    , bench
-    , perRunEnv
-    )
+import Gauge (defaultMain, bench, nfIO)
 import System.Directory (removeFile, findExecutable)
 import System.IO
     ( Handle
@@ -25,83 +21,89 @@ import qualified Streamly.Data.Fold as FL
 import qualified Streamly.Internal.FileSystem.Handle
     as FH (toBytes, toChunks, putBytes, putChunks)
 
+-------------------------------------------------------------------------------
+-- Constants and utils
+-------------------------------------------------------------------------------
+
 _a :: Word8
 _a = 97
 
+-- XXX portability on macOS
 devRandom :: String
-devRandom = "/dev/random"
+devRandom = "/dev/urandom"
 
 devNull :: String
 devNull = "/dev/null"
 
-ioDdBinary :: IO FilePath
-ioDdBinary = do
-    maybeDdBinary <- findExecutable "dd"
-    case maybeDdBinary of
-        Just ddBinary -> return ddBinary
-        _ -> error "dd Binary Not Found"
+which :: String -> IO FilePath
+which cmd = do
+    r <- findExecutable cmd
+    case r of
+        Just path -> return path
+        _ -> error $ "Required command " ++ cmd ++ " not found"
+
+-------------------------------------------------------------------------------
+-- Create a data file filled with random data
+-------------------------------------------------------------------------------
 
 ddBlockSize :: Int
-ddBlockSize = 1024
+ddBlockSize = 1024 * 1024
 
 ddBlockCount :: Int
-ddBlockCount = 100              -- ~100 KB
-
-numCharInCharFile :: Int
-numCharInCharFile = 100 * 1024  -- ~100 KB
-
-ioCatBinary :: IO FilePath
-ioCatBinary = do
-    maybeDdBinary <- findExecutable "cat"
-    case maybeDdBinary of
-        Just ddBinary -> return ddBinary
-        _ -> error "cat Binary Not Found"
-
-ioTrBinary :: IO FilePath
-ioTrBinary = do
-    maybeDdBinary <- findExecutable "tr"
-    case maybeDdBinary of
-        Just ddBinary -> return ddBinary
-        _ -> error "tr Binary Not Found"
+ddBlockCount = 10
 
 largeByteFile :: String
 largeByteFile = "./largeByteFile"
 
+generateByteFile :: IO ()
+generateByteFile = do
+    ddPath <- which "dd"
+    let procObj = proc ddPath [
+                "if=" ++ devRandom,
+                "of=" ++ largeByteFile,
+                "count=" ++ show ddBlockCount,
+                "bs=" ++ show ddBlockSize
+            ]
+
+    (_, _, _, procHandle) <- createProcess procObj
+    _ <- waitForProcess procHandle
+    return ()
+
+-------------------------------------------------------------------------------
+-- Create a file filled with ascii chars
+-------------------------------------------------------------------------------
+
 largeCharFile :: String
 largeCharFile = "./largeCharFile"
 
-executableFile :: String
-executableFile = "./writeTrToError.sh"
-
-executableFileContent :: String
-executableFileContent =
-    "tr [a-z] [A-Z] <&0 >&2"
-
-createExecutable :: IO ()
-createExecutable = do
-    writeFile executableFile executableFileContent
-    callCommand ("chmod +x " ++ executableFile)
-
-generateByteFile :: IO ()
-generateByteFile =
-    do
-        ddBinary <- ioDdBinary
-        let procObj = proc ddBinary [
-                    "if=" ++ devRandom,
-                    "of=" ++ largeByteFile,
-                    "count=" ++ show ddBlockCount,
-                    "bs=" ++ show ddBlockSize
-                ]
-
-        (_, _, _, procHandle) <- createProcess procObj
-        _ <- waitForProcess procHandle
-        return ()
+numCharInCharFile :: Int
+numCharInCharFile = 10 * 1024 * 1024
 
 generateCharFile :: IO ()
 generateCharFile = do
     handle <- openFile largeCharFile WriteMode
     FH.putBytes handle (S.replicate numCharInCharFile _a)
     hClose handle
+
+-------------------------------------------------------------------------------
+-- Create a utility that writes to stderr
+-------------------------------------------------------------------------------
+
+trToStderr :: String
+trToStderr = "./writeTrToError.sh"
+
+trToStderrContent :: String
+trToStderrContent =
+    "tr [a-z] [A-Z] <&0 >&2"
+
+createExecutable :: IO ()
+createExecutable = do
+    writeFile trToStderr trToStderrContent
+    callCommand ("chmod +x " ++ trToStderr)
+
+-------------------------------------------------------------------------------
+-- Create and delete the temp data/exec files
+-------------------------------------------------------------------------------
 
 generateFiles :: IO ()
 generateFiles = do
@@ -111,142 +113,109 @@ generateFiles = do
 
 deleteFiles :: IO ()
 deleteFiles = do
-    removeFile executableFile
+    removeFile trToStderr
     removeFile largeByteFile
     removeFile largeCharFile
 
-toBytes :: Handle -> IO ()
-toBytes hdl = do
-    catBinary <- ioCatBinary
-    FH.putBytes hdl $ Proc.toBytes catBinary [largeByteFile]
+-------------------------------------------------------------------------------
+-- Benchmark functions
+-------------------------------------------------------------------------------
 
-toChunks :: Handle -> IO ()
-toChunks hdl = do
-    catBinary <- ioCatBinary
-    FH.putChunks hdl $
-        Proc.toChunks catBinary [largeByteFile]
+toBytes :: String-> Handle -> IO ()
+toBytes catPath outH =
+    FH.putBytes outH $ Proc.toBytes catPath [largeByteFile]
 
-processBytes_ :: (Handle, Handle) -> IO ()
-processBytes_ (inputHdl, outputHdl) = do
-    trBinary <- ioTrBinary
+toChunks :: String -> Handle -> IO ()
+toChunks catPath hdl =
+    FH.putChunks hdl $ Proc.toChunks catPath [largeByteFile]
+
+processBytes_ :: String -> Handle -> IO ()
+processBytes_ trPath outputHdl = do
+    inputHdl <- openFile largeCharFile ReadMode
     FH.putBytes outputHdl $
         Proc.processBytes_
-            trBinary
+            trPath
             ["[a-z]", "[A-Z]"]
             (FH.toBytes inputHdl)
+    hClose inputHdl
 
-processChunks_ :: (Handle, Handle) -> IO ()
-processChunks_ (inputHdl, outputHdl) = do
-    trBinary <- ioTrBinary
+processBytes :: String-> Handle -> IO ()
+processBytes trPath outputHdl = do
+    inputHdl <- openFile largeCharFile ReadMode
+    FH.putBytes outputHdl $
+        Proc.processBytes
+            trPath
+            ["[a-z]", "[A-Z]"]
+            FL.drain
+            (FH.toBytes inputHdl)
+    hClose inputHdl
+
+processBytesToStderr :: Handle -> IO ()
+processBytesToStderr outputHdl = do
+    inputHdl <- openFile largeCharFile ReadMode
+    FH.putBytes outputHdl $
+        Proc.processBytes
+            trToStderr
+            ["[a-z]", "[A-Z]"]
+            FL.drain
+            (FH.toBytes inputHdl)
+    hClose inputHdl
+
+processChunks_ :: String -> Handle -> IO ()
+processChunks_ trPath outputHdl = do
+    inputHdl <- openFile largeCharFile ReadMode
     FH.putChunks outputHdl $
         Proc.processChunks_
-            trBinary
+            trPath
             ["[a-z]", "[A-Z]"]
             (FH.toChunks inputHdl)
+    hClose inputHdl
 
-processBytes1 :: (Handle, Handle) -> IO ()
-processBytes1 (inputHdl, outputHdl) = do
-    trBinary <- ioTrBinary
-    FH.putBytes outputHdl $
-        Proc.processBytes
-            trBinary
-            ["[a-z]", "[A-Z]"]
-            FL.drain
-            (FH.toBytes inputHdl)
-
-processBytes2 :: (Handle, Handle) -> IO ()
-processBytes2 (inputHdl, outputHdl) =
-    FH.putBytes outputHdl $
-        Proc.processBytes
-            executableFile
-            ["[a-z]", "[A-Z]"]
-            FL.drain
-            (FH.toBytes inputHdl)
-
-processChunks1 :: (Handle, Handle) -> IO ()
-processChunks1 (inputHdl, outputHdl) = do
-    trBinary <- ioTrBinary
+processChunks :: String -> Handle -> IO ()
+processChunks trPath outputHdl = do
+    inputHdl <- openFile largeCharFile ReadMode
     FH.putChunks outputHdl $
         Proc.processChunks
-            trBinary
+            trPath
             ["[a-z]", "[A-Z]"]
             FL.drain
             (FH.toChunks inputHdl)
+    hClose inputHdl
 
-processChunks2 :: (Handle, Handle) -> IO ()
-processChunks2 (inputHdl, outputHdl) = do
+processChunksToStderr :: Handle -> IO ()
+processChunksToStderr outputHdl = do
+    inputHdl <- openFile largeCharFile ReadMode
     FH.putChunks outputHdl $
         Proc.processChunks
-            executableFile
+            trToStderr
             ["[a-z]", "[A-Z]"]
             FL.drain (FH.toChunks inputHdl)
+    hClose inputHdl
 
-benchWithOut ::
-    IORef Handle
-    -> (Handle -> IO ())
-    -> Benchmarkable
-benchWithOut nullFileIoRef func = perRunEnv openNewHandle benchCode
-
-    where
-
-    openNewHandle = do
-        oldHandle <- readIORef nullFileIoRef
-        hClose oldHandle
-        newHandle <- openFile devNull WriteMode
-        writeIORef nullFileIoRef newHandle
-
-    benchCode _ = do
-        handle <- readIORef nullFileIoRef
-        func handle
-
-benchWithInpOut ::
-    IORef (Handle, Handle)
-    -> ((Handle, Handle) -> IO ())
-    -> Benchmarkable
-benchWithInpOut inpOutIoRef func = perRunEnv openNewHandles benchCode
-
-    where
-
-    openNewHandles = do
-        (oldInputHdl, oldOutputHdl) <- readIORef inpOutIoRef
-        hClose oldInputHdl
-        hClose oldOutputHdl
-        newInputHdl <- openFile largeCharFile ReadMode
-        newOutputHdl <- openFile devNull WriteMode
-        writeIORef inpOutIoRef (newInputHdl, newOutputHdl)
-
-    benchCode _ = do
-        inpOutHdls <- readIORef inpOutIoRef
-        func inpOutHdls
+-------------------------------------------------------------------------------
+-- Main
+-------------------------------------------------------------------------------
 
 main :: IO ()
 main = do
+    putStrLn "Generating files..."
     generateFiles
-    tempHandleWrite <- openFile devNull WriteMode
-    tempHandleRead <- openFile devNull ReadMode
-    ioRefOut <- newIORef tempHandleWrite
-    ioRefInpOut <- newIORef (tempHandleRead, tempHandleWrite)
-    defaultMain [
-            bench "exe - word8" $
-                benchWithOut ioRefOut toBytes,
-            bench "exe - array of word8" $
-                benchWithOut ioRefOut toChunks,
-            bench "exe - word8 to word8" $
-                benchWithInpOut ioRefInpOut processBytes_,
-            bench "exe - array of word8 to array of word8" $
-                benchWithInpOut ioRefInpOut processChunks_,
-            bench "exe - word8 to word8 - drain error" $
-                benchWithInpOut ioRefInpOut processBytes1,
-            bench "exe - word8 to standard error - drain error" $
-                benchWithInpOut ioRefInpOut processBytes2,
-            bench "exe - array of word8 to array of word8 - drain error" $
-                benchWithInpOut ioRefInpOut processChunks1,
-            bench "exe - array of word8 to standard error - drain error" $
-                benchWithInpOut ioRefInpOut processChunks2
-        ]
-    handleOut1 <- readIORef ioRefOut
-    hClose handleOut1
-    (handleIn2, handleOut2) <- readIORef ioRefInpOut
-    hClose handleIn2
-    hClose handleOut2
-    deleteFiles
+    trPath <- which "tr"
+    catPath <- which "cat"
+    nullH <- openFile devNull WriteMode
+    putStrLn "Running benchmarks..."
+
+    defaultMain
+        [ bench "toBytes" $ nfIO $ toBytes catPath nullH
+        , bench "toChunks" $ nfIO $ toChunks catPath nullH
+        , bench "processBytes_ tr" $ nfIO $ processBytes_ trPath nullH
+        , bench "processBytes tr" $ nfIO $ processBytes trPath nullH
+        , bench "processBytesToStderr tr" $ nfIO $ processBytesToStderr nullH
+        , bench "processChunks_ tr" $ nfIO (processChunks_ trPath nullH)
+        , bench "processChunks tr" $ nfIO (processChunks trPath nullH)
+        , bench "processChunksToStderr" $ nfIO $ processChunksToStderr nullH
+        ] `finally` (do
+            putStrLn "cleanup ..."
+            hClose nullH
+            deleteFiles
+           )

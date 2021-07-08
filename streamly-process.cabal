@@ -26,6 +26,9 @@ source-repository head
 
 flag fusion-plugin
   description: Use fusion plugin for benchmarks and executables
+
+flag use-gauge
+  description: Use gauge instead of tasty-bench for benchmarking
   manual: True
   default: False
 
@@ -79,7 +82,7 @@ common threading-options
     -with-rtsopts=-N
 
 benchmark Benchmark.System.Process
-  import: compile-options, optimization-options, threading-options
+  import: compile-options, optimization-options
   if flag(fusion-plugin) && !impl(ghc < 8.6)
     ghc-options: -fplugin Fusion.Plugin
   type: exitcode-stdio-1.0
@@ -88,7 +91,6 @@ benchmark Benchmark.System.Process
       streamly-process
     , base              >= 4.8   && < 5
     , directory         >= 1.2.2 && < 1.4
-    , gauge             >= 0.2.4 && < 0.3
     , process           >= 1.0   && < 1.7
     -- Uses internal APIs
     , streamly          >= 0.8   && < 0.8.1
@@ -96,6 +98,14 @@ benchmark Benchmark.System.Process
   if flag(fusion-plugin) && !impl(ghc < 8.6)
     build-depends:
         fusion-plugin     >= 0.2   && < 0.3
+  if flag(use-gauge)
+    build-depends:  gauge >= 0.2.4 && < 0.3
+  else
+    build-depends:    tasty-bench >= 0.2.5 && < 0.3
+    mixins: tasty-bench
+      (Test.Tasty.Bench as Gauge
+      , Test.Tasty.Bench as Gauge.Main
+      )
 
 -------------------------------------------------------------------------------
 -- Test Suites
