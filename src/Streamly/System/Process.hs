@@ -100,8 +100,8 @@ instance Exception ProcessFailure where
 -- raises 'ProcessFailure' exception if process failed with some
 -- exit code, else peforms no action
 --
-exceptOnError :: MonadIO m => ProcessHandle -> m ()
-exceptOnError procHandle = liftIO $ do
+wait :: MonadIO m => ProcessHandle -> m ()
+wait procHandle = liftIO $ do
     exitCode <- waitForProcess procHandle
     case exitCode of
         ExitSuccess -> return ()
@@ -153,7 +153,7 @@ withExe fpath args genStrm = Stream.bracket pre post body
     pre = liftIO $ openProc fpath args
 
     post (readHdl, procHandle) =
-        liftIO $ hClose readHdl >> exceptOnError procHandle
+        liftIO $ hClose readHdl >> wait procHandle
 
     body (readHdl, _) = genStrm readHdl
 
@@ -211,81 +211,12 @@ withInpExe fpath args input genStrm = Stream.bracket pre post body
     pre = liftIO $ openProcInp fpath args
 
     post (_, readHdl, procHandle) =
-        liftIO $ hClose readHdl >> exceptOnError procHandle
+        liftIO $ hClose readHdl >> wait procHandle
 
     body (writeHdl, readHdl, _) =
         parallel
             (Stream.before (writeAction writeHdl) Stream.nil)
             (genStrm readHdl)
-
--- |
--- Creates a process using the path to executable and arguments, then
--- builds three pipes, one whose read end is made the process's standard
--- input, and another whose write end is made the process's standard
--- output, and the final one's write end is made the process's standard error.
--- The function returns the handle to write end to the process's input, handle
--- to read end to process's output, handle to read end to process's standard
--- error and process handle of the process
---
-openProcErr ::
-    FilePath                                -- ^ Path to Executable
-    -> [String]                             -- ^ Arguments
-    -> IO (Handle, Handle, Handle, ProcessHandle)
-    -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
-openProcErr fpath args = do
-    let procObj = (proc fpath args) {
-            std_in = CreatePipe,
-            std_out = CreatePipe,
-            std_err = CreatePipe,
-            close_fds = True,
-            use_process_jobs = True
-        }
-
-    (Just writeInpEnd, Just readOutEnd, Just readErrEnd, procHandle)
-        <- createProcess procObj
-    return (writeInpEnd, readOutEnd, readErrEnd, procHandle)
-
--- |
--- Creates a process using the path to executable, arguments and a stream
--- which would be used as input to the process (passed as standard input),
--- then using a pipe, it reads from the process's standard error and folds
--- it using the supplied Fold, then connects another pipe's write end with
--- output of the process and generates a stream based on a function which
--- takes the read end of the pipe and generates a stream.
---
--- Raises an exception 'ProcessFailure' if process failed due to some
--- reason
---
-withErrExe ::
-    (IsStream t, MonadCatch m, MonadAsync m)
-    => FilePath             -- ^ Path to Executable
-    -> [String]             -- ^ Arguments
-    -> Fold m Word8 b       -- ^ Fold to fold the error stream
-    -> t m Word8            -- ^ Input stream to the process
-    -> (Handle -> t m a)    -- ^ Output stream generator
-    -> t m a                -- ^ Stream produced
-withErrExe fpath args fld input genStrm = Stream.bracket pre post body
-
-    where
-
-    writeAction writeHdl =
-        Handle.putBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
-
-    foldErrAction errorHdl =
-        Stream.fold fld (Handle.toBytes errorHdl) >> liftIO (hClose errorHdl)
-
-    runActions writeHdl errorHdl =
-        parallel
-            (Stream.before (writeAction writeHdl) Stream.nil)
-            (Stream.before (foldErrAction errorHdl) Stream.nil)
-
-    pre = liftIO $ openProcErr fpath args
-
-    post (_, readHdl, _, procHandle) =
-        liftIO $ hClose readHdl >> exceptOnError procHandle
-
-    body (writeHdl, readHdl, errorHdl, _) =
-        parallel (runActions writeHdl errorHdl) (genStrm readHdl)
 
 -- | @toBytes path args@ runs the executable at @path@ using @args@ as
 -- arguments and returns the output (@stdout@) of the executable as a stream of
@@ -364,6 +295,82 @@ processChunks_ ::
     -> t m (Array Word8)    -- ^ Output Stream
 processChunks_ fpath args inStream =
     withInpExe fpath args (ArrayStream.concat inStream) Handle.toChunks
+
+-- |
+-- Creates a process using the path to executable and arguments, then
+-- builds three pipes, one whose read end is made the process's standard
+-- input, and another whose write end is made the process's standard
+-- output, and the final one's write end is made the process's standard error.
+-- The function returns the handle to write end to the process's input, handle
+-- to read end to process's output, handle to read end to process's standard
+-- error and process handle of the process
+--
+openProcErr ::
+    FilePath                                -- ^ Path to Executable
+    -> [String]                             -- ^ Arguments
+    -> IO (Handle, Handle, Handle, ProcessHandle)
+    -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
+openProcErr fpath args = do
+    let spec = proc fpath args
+        spec1 =
+            spec
+                { std_in = CreatePipe
+                , std_out = CreatePipe
+                , std_err = CreatePipe
+                , close_fds = True
+                , use_process_jobs = True
+                }
+
+    (Just stdinH, Just stdoutH, Just stderrH, procH)
+        <- createProcess spec1
+    return (stdinH, stdoutH, stderrH, procH)
+
+-- |
+-- Creates a process using the path to executable, arguments and a stream
+-- which would be used as input to the process (passed as standard input),
+-- then using a pipe, it reads from the process's standard error and folds
+-- it using the supplied Fold, then connects another pipe's write end with
+-- output of the process and generates a stream based on a function which
+-- takes the read end of the pipe and generates a stream.
+--
+-- Raises an exception 'ProcessFailure' if process failed due to some
+-- reason
+--
+withErrExe ::
+    (IsStream t, MonadCatch m, MonadAsync m)
+    => FilePath             -- ^ Path to Executable
+    -> [String]             -- ^ Arguments
+    -> Fold m Word8 b       -- ^ Fold to fold the error stream
+    -> t m Word8            -- ^ Input stream to the process
+    -> (Handle -> t m a)    -- ^ Output stream generator
+    -> t m a                -- ^ Stream produced
+withErrExe fpath args fld input fromHandle = Stream.bracket alloc cleanup run
+
+    where
+
+    alloc = liftIO $ openProcErr fpath args
+
+    cleanup (stdinH, stdoutH, stderrH, procH) = do
+        liftIO $ hClose stdinH >> hClose stdoutH >> hClose stderrH
+        wait procH
+
+    fromEffect_ eff = Stream.before eff Stream.nil
+
+    runStderr stderrH = fromEffect_ $
+        Stream.fold fld (Handle.toBytes stderrH)
+            >> liftIO (hClose stderrH)
+
+    runStdin stdinH = fromEffect_ $
+        Handle.putBytes stdinH (adapt input)
+            >> liftIO (hClose stdinH)
+
+    runStdout stdoutH =
+        Stream.after (liftIO $ hClose stdoutH) (fromHandle stdoutH)
+
+    run (stdinH, stdoutH, stderrH, _) =
+        runStdin stdinH
+            `parallel` runStderr stderrH
+            `parallel` runStdout stdoutH
 
 -- | @processBytes path args errAccum input@ runs the executable at @path@
 -- using @args@ as arguments and @input@ stream as its standard input.  The
