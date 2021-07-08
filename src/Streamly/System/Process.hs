@@ -336,6 +336,7 @@ openProcErr fpath args = do
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
+{-# INLINE withErrExe #-}
 withErrExe ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to Executable
