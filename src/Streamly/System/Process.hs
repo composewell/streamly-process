@@ -75,7 +75,6 @@ import qualified Streamly.Prelude as Stream
 -- Internal imports
 import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as ArrayStream (concat)
-import qualified Streamly.Internal.Data.Stream.IsStream as Stream (nilM)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (toBytes, toChunks, putBytes)
 
@@ -215,7 +214,9 @@ withInpExe fpath args input genStrm = Stream.bracket pre post body
         liftIO $ hClose readHdl >> exceptOnError procHandle
 
     body (writeHdl, readHdl, _) =
-        parallel (Stream.nilM $ writeAction writeHdl) (genStrm readHdl)
+        parallel
+            (Stream.before (writeAction writeHdl) Stream.nil)
+            (genStrm readHdl)
 
 -- |
 -- Creates a process using the path to executable and arguments, then
@@ -273,9 +274,10 @@ withErrExe fpath args fld input genStrm = Stream.bracket pre post body
     foldErrAction errorHdl =
         Stream.fold fld (Handle.toBytes errorHdl) >> liftIO (hClose errorHdl)
 
-    runActions writeHdl errorHdl = parallel
-        (Stream.nilM $ writeAction writeHdl)
-        (Stream.nilM $ foldErrAction errorHdl)
+    runActions writeHdl errorHdl =
+        parallel
+            (Stream.before (writeAction writeHdl) Stream.nil)
+            (Stream.before (foldErrAction errorHdl) Stream.nil)
 
     pre = liftIO $ openProcErr fpath args
 
