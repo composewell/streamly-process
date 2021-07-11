@@ -149,8 +149,8 @@ openProcErr fpath args = do
 -- Raises an exception 'ProcessFailure' if process failed due to some
 -- reason
 --
-{-# INLINE withErrExe #-}
-withErrExe ::
+{-# INLINE runProcess #-}
+runProcess ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
@@ -158,7 +158,7 @@ withErrExe ::
     -> t m (Array Word8)    -- ^ Input stream to the process
     -> (Handle -> t m a)    -- ^ Output stream generator
     -> t m a                -- ^ Stream produced
-withErrExe fpath args fld input fromHandle = Stream.bracket alloc cleanup run
+runProcess fpath args fld input fromHandle = Stream.bracket alloc cleanup run
 
     where
 
@@ -228,7 +228,7 @@ processBytes ::
     -> t m Word8        -- ^ Output Stream
 processBytes fpath args fld input =
     let input1 = ArrayStream.arraysOf defaultChunkSize input
-     in ArrayStream.concat $ withErrExe fpath args fld input1 Handle.toChunks
+     in ArrayStream.concat $ runProcess fpath args fld input1 Handle.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
@@ -251,7 +251,7 @@ processChunks ::
     -> t m (Array Word8)        -- ^ Input Stream
     -> t m (Array Word8)        -- ^ Output Stream
 processChunks fpath args fld input =
-    withErrExe fpath args fld input Handle.toChunks
+    runProcess fpath args fld input Handle.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
