@@ -70,6 +70,7 @@ import System.Process
     , waitForProcess
     )
 
+import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Prelude as Stream
 
 -- Internal imports
@@ -106,56 +107,6 @@ wait procHandle = liftIO $ do
     case exitCode of
         ExitSuccess -> return ()
         ExitFailure exitCodeInt -> throwM $ ProcessFailure exitCodeInt
-
--- |
--- Creates a process using the path to executable and arguments, then
--- connects a pipe's write end with output of the process, and
--- returns the read end's handle and the process handle of the process
---
-{-# INLINE openProc #-}
-openProc ::
-    FilePath                        -- ^ Path to Executable
-    -> [String]                     -- ^ Arguments
-    -> IO (Handle, ProcessHandle)
-    -- ^ Handle to read from output of process, process handle
-openProc fpath args = do
-    let procObj = (proc fpath args) {
-            std_out = CreatePipe,
-            close_fds = True,
-            use_process_jobs = True
-        }
-
-    (_, Just readEnd, _, procHandle) <- createProcess procObj
-    return (readEnd, procHandle)
-
--- |
--- Creates a process using the path to executable and arguments, then
--- connects a pipe's write end with output of the process and
--- generates a stream based on a function which takes the read end of the
--- pipe and generates a stream
---
--- Raises an exception 'ProcessFailure' if process failed due to some
--- reason
---
-{-# INLINE withExe #-}
-withExe ::
-        (IsStream t, MonadAsync m, MonadCatch m)
-        => FilePath          -- ^ Path to Executable
-        -> [String]          -- ^ Arguments
-        -> (Handle -> t m a)
-        -- ^ Given handle to read from output of
-        -- process generate stream output
-        -> t m a             -- ^ Stream produced
-withExe fpath args genStrm = Stream.bracket pre post body
-
-    where
-
-    pre = liftIO $ openProc fpath args
-
-    post (readHdl, procHandle) =
-        liftIO $ hClose readHdl >> wait procHandle
-
-    body (readHdl, _) = genStrm readHdl
 
 -- |
 -- Creates a process using the path to executable and arguments, then
@@ -217,44 +168,6 @@ withInpExe fpath args input genStrm = Stream.bracket pre post body
         parallel
             (Stream.before (writeAction writeHdl) Stream.nil)
             (genStrm readHdl)
-
--- | @toBytes path args@ runs the executable at @path@ using @args@ as
--- arguments and returns the output (@stdout@) of the executable as a stream of
--- bytes. The error stream (@stderr@) is ignored.
---
--- Raises 'ProcessFailure' exception in case of failure.
---
--- For example, the following is equivalent to the shell command @echo "hello
--- world" | cat@:
---
--- >>> Process.toBytes "/bin/echo" ["hello", "world"] & Stream.fold Stdio.write
--- hello world
---
--- @since 0.1.0
-{-# INLINE toBytes #-}
-toBytes ::
-    (IsStream t, MonadAsync m, MonadCatch m)
-    => FilePath     -- ^ Executable path
-    -> [String]     -- ^ Arguments
-    -> t m Word8    -- ^ Output Stream
-toBytes fpath args = ArrayStream.concat $ withExe fpath args Handle.toChunks
-
--- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
--- of @Word8@.
---
--- For example, the following is equivalent to the shell command @echo "hello
--- world" | cat@:
---
--- >>> Process.toChunks "/bin/echo" ["hello", "world"] & Stream.fold Stdio.writeChunks
--- hello world
---
--- @since 0.1.0
-toChunks ::
-    (IsStream t, MonadAsync m, MonadCatch m)
-    => FilePath             -- ^ Executable path
-    -> [String]             -- ^ Arguments
-    -> t m (Array Word8)    -- ^ Output Stream
-toChunks fpath args = withExe fpath args Handle.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
@@ -438,3 +351,41 @@ processChunks ::
     -> t m (Array Word8)        -- ^ Output Stream
 processChunks fpath args fld inStream =
     withErrExe fpath args fld (ArrayStream.concat inStream) Handle.toChunks
+
+-- | @toBytes path args@ runs the executable at @path@ using @args@ as
+-- arguments and returns the output (@stdout@) of the executable as a stream of
+-- bytes. The error stream (@stderr@) is ignored.
+--
+-- Raises 'ProcessFailure' exception in case of failure.
+--
+-- For example, the following is equivalent to the shell command @echo "hello
+-- world" | cat@:
+--
+-- >>> Process.toBytes "/bin/echo" ["hello", "world"] & Stream.fold Stdio.write
+-- hello world
+--
+-- @since 0.1.0
+{-# INLINE toBytes #-}
+toBytes ::
+    (IsStream t, MonadAsync m, MonadCatch m)
+    => FilePath     -- ^ Executable path
+    -> [String]     -- ^ Arguments
+    -> t m Word8    -- ^ Output Stream
+toBytes fpath args = processBytes fpath args Fold.drain Stream.nil
+
+-- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
+-- of @Word8@.
+--
+-- For example, the following is equivalent to the shell command @echo "hello
+-- world" | cat@:
+--
+-- >>> Process.toChunks "/bin/echo" ["hello", "world"] & Stream.fold Stdio.writeChunks
+-- hello world
+--
+-- @since 0.1.0
+toChunks ::
+    (IsStream t, MonadAsync m, MonadCatch m)
+    => FilePath             -- ^ Executable path
+    -> [String]             -- ^ Arguments
+    -> t m (Array Word8)    -- ^ Output Stream
+toChunks fpath args = processChunks fpath args Fold.drain Stream.nil
