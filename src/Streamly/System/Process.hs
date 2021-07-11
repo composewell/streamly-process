@@ -75,9 +75,10 @@ import qualified Streamly.Prelude as Stream
 
 -- Internal imports
 import qualified Streamly.Internal.Data.Array.Stream.Foreign
-    as ArrayStream (concat)
+    as ArrayStream (concat, arraysOf)
 import qualified Streamly.Internal.FileSystem.Handle
-    as Handle (toBytes, toChunks, putBytes)
+    as Handle (toBytes, toChunks, putChunks)
+import Streamly.Internal.Data.Array.Foreign.Type (defaultChunkSize)
 
 -- $setup
 -- >>> import qualified Streamly.Console.Stdio as Stdio
@@ -154,7 +155,7 @@ withErrExe ::
     => FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> Fold m Word8 b       -- ^ Fold to fold the error stream
-    -> t m Word8            -- ^ Input stream to the process
+    -> t m (Array Word8)    -- ^ Input stream to the process
     -> (Handle -> t m a)    -- ^ Output stream generator
     -> t m a                -- ^ Stream produced
 withErrExe fpath args fld input fromHandle = Stream.bracket alloc cleanup run
@@ -174,7 +175,7 @@ withErrExe fpath args fld input fromHandle = Stream.bracket alloc cleanup run
             >> liftIO (hClose stderrH)
 
     runStdin stdinH = fromEffect_ $
-        Handle.putBytes stdinH (adapt input)
+        Handle.putChunks stdinH (adapt input)
             >> liftIO (hClose stdinH)
 
     runStdout stdoutH =
@@ -225,8 +226,9 @@ processBytes ::
     -> Fold m Word8 b   -- ^ Error stream Fold
     -> t m Word8        -- ^ Input Stream
     -> t m Word8        -- ^ Output Stream
-processBytes fpath args fld inStream =
-    ArrayStream.concat $ withErrExe fpath args fld inStream Handle.toChunks
+processBytes fpath args fld input =
+    let input1 = ArrayStream.arraysOf defaultChunkSize input
+     in ArrayStream.concat $ withErrExe fpath args fld input1 Handle.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
@@ -248,8 +250,8 @@ processChunks ::
     -> Fold m Word8 b           -- ^ Fold to fold Error Stream
     -> t m (Array Word8)        -- ^ Input Stream
     -> t m (Array Word8)        -- ^ Output Stream
-processChunks fpath args fld inStream =
-    withErrExe fpath args fld (ArrayStream.concat inStream) Handle.toChunks
+processChunks fpath args fld input =
+    withErrExe fpath args fld input Handle.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
