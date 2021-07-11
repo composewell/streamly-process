@@ -414,7 +414,7 @@ processBytes ::
     -> t m Word8        -- ^ Input Stream
     -> t m Word8        -- ^ Output Stream
 processBytes fpath args fld inStream =
-    withErrExe fpath args fld inStream Handle.toBytes
+    ArrayStream.concat $ withErrExe fpath args fld inStream Handle.toChunks
 
 -- |
 -- Runs a process specified by the path to executable, arguments
