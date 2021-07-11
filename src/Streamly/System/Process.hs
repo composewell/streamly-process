@@ -110,107 +110,6 @@ wait procHandle = liftIO $ do
 
 -- |
 -- Creates a process using the path to executable and arguments, then
--- builds two pipes, one whose read end is made the process's standard
--- input, and another whose write end is made the process's standard
--- output. The function returns the handle to write end to the
--- process's input, handle to read end to process's output and
--- process handle of the process
---
-{-# INLINE openProcInp #-}
-openProcInp ::
-    FilePath                                -- ^ Path to Executable
-    -> [String]                             -- ^ Arguments
-    -> IO (Handle, Handle, ProcessHandle)
-    -- ^ (Input Handle, Output Handle, Process Handle)
-openProcInp fpath args = do
-    let procObj = (proc fpath args) {
-            std_in = CreatePipe,
-            std_out = CreatePipe,
-            close_fds = True,
-            use_process_jobs = True
-        }
-
-    (Just writeInpEnd, Just readOutEnd, _, procHandle) <- createProcess procObj
-    return (writeInpEnd, readOutEnd, procHandle)
-
--- |
--- Creates a process using the path to executable, arguments and a stream
--- which would be used as input to the process (passed as standard input),
--- then connects a pipe's write end with output of the process and generates
--- a stream based on a function which takes the read end of the pipe and
--- generates a stream.
---
--- Raises an exception 'ProcessFailure' if process failed due to some
--- reason
---
-{-# INLINE withInpExe #-}
-withInpExe ::
-    (IsStream t, MonadAsync m, MonadCatch m)
-    => FilePath             -- ^ Path to Executable
-    -> [String]             -- ^ Arguments
-    -> t m Word8            -- ^ Input stream to the process
-    -> (Handle -> t m a)
-    -- ^ Handle to read output of process and generate stream
-    -> t m a                -- ^ Stream produced
-withInpExe fpath args input genStrm = Stream.bracket pre post body
-
-    where
-
-    writeAction writeHdl =
-        Handle.putBytes writeHdl (adapt input) >> liftIO (hClose writeHdl)
-
-    pre = liftIO $ openProcInp fpath args
-
-    post (_, readHdl, procHandle) =
-        liftIO $ hClose readHdl >> wait procHandle
-
-    body (writeHdl, readHdl, _) =
-        parallel
-            (Stream.before (writeAction writeHdl) Stream.nil)
-            (genStrm readHdl)
-
--- |
--- Runs a process specified by the path to executable, arguments
--- that are to be passed and input to be provided to the process
--- (standard input) and returns the output of the process (standard output).
---
--- Raises an exception 'ProcessFailure' if process failed due to some
--- reason
---
--- @since 0.1.0
-{-# INLINE processBytes_ #-}
-processBytes_ ::
-    (IsStream t, MonadCatch m, MonadAsync m)
-    => FilePath     -- ^ Path to executable
-    -> [String]     -- ^ Arguments to pass to executable
-    -> t m Word8    -- ^ Input Stream
-    -> t m Word8    -- ^ Output Stream
-processBytes_ fpath args inStream =
-    ArrayStream.concat $ withInpExe fpath args inStream Handle.toChunks
-
--- |
--- Runs a process specified by the path to executable, arguments
--- that are to be passed and input to be provided to the process
--- (standard input) in the form of a stream of array of Word8
--- and returns the output of the process (standard output) in
--- the form of a stream of array of Word8
---
--- Raises an exception 'ProcessFailure' If process failed due to some
--- reason
---
--- @since 0.1.0
-{-# INLINE processChunks_ #-}
-processChunks_ ::
-    (IsStream t, MonadCatch m, MonadAsync m)
-    => FilePath             -- ^ Path to executable
-    -> [String]             -- ^ Arguments to pass to executable
-    -> t m (Array Word8)    -- ^ Input Stream
-    -> t m (Array Word8)    -- ^ Output Stream
-processChunks_ fpath args inStream =
-    withInpExe fpath args (ArrayStream.concat inStream) Handle.toChunks
-
--- |
--- Creates a process using the path to executable and arguments, then
 -- builds three pipes, one whose read end is made the process's standard
 -- input, and another whose write end is made the process's standard
 -- output, and the final one's write end is made the process's standard error.
@@ -351,6 +250,44 @@ processChunks ::
     -> t m (Array Word8)        -- ^ Output Stream
 processChunks fpath args fld inStream =
     withErrExe fpath args fld (ArrayStream.concat inStream) Handle.toChunks
+
+-- |
+-- Runs a process specified by the path to executable, arguments
+-- that are to be passed and input to be provided to the process
+-- (standard input) and returns the output of the process (standard output).
+--
+-- Raises an exception 'ProcessFailure' if process failed due to some
+-- reason
+--
+-- @since 0.1.0
+{-# INLINE processBytes_ #-}
+processBytes_ ::
+    (IsStream t, MonadCatch m, MonadAsync m)
+    => FilePath     -- ^ Path to executable
+    -> [String]     -- ^ Arguments to pass to executable
+    -> t m Word8    -- ^ Input Stream
+    -> t m Word8    -- ^ Output Stream
+processBytes_ fpath args = processBytes fpath args Fold.drain
+
+-- |
+-- Runs a process specified by the path to executable, arguments
+-- that are to be passed and input to be provided to the process
+-- (standard input) in the form of a stream of array of Word8
+-- and returns the output of the process (standard output) in
+-- the form of a stream of array of Word8
+--
+-- Raises an exception 'ProcessFailure' If process failed due to some
+-- reason
+--
+-- @since 0.1.0
+{-# INLINE processChunks_ #-}
+processChunks_ ::
+    (IsStream t, MonadCatch m, MonadAsync m)
+    => FilePath             -- ^ Path to executable
+    -> [String]             -- ^ Arguments to pass to executable
+    -> t m (Array Word8)    -- ^ Input Stream
+    -> t m (Array Word8)    -- ^ Output Stream
+processChunks_ fpath args = processChunks fpath args Fold.drain
 
 -- | @toBytes path args@ runs the executable at @path@ using @args@ as
 -- arguments and returns the output (@stdout@) of the executable as a stream of
