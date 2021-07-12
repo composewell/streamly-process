@@ -281,7 +281,7 @@ processBytes path args input =
 -- @since 0.1.0
 {-# INLINE processBytes_ #-}
 processBytes_ ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (IsStream t, MonadCatch m, MonadAsync m, Functor (t m))
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
     -> t m Word8    -- ^ Input Stream
@@ -301,7 +301,7 @@ processBytes_ path args = rights . processBytes path args
 -- @since 0.1.0
 {-# INLINE processChunks_ #-}
 processChunks_ ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (IsStream t, MonadCatch m, MonadAsync m, Functor (t m))
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
     -> t m (Array Word8)    -- ^ Input Stream
@@ -344,7 +344,7 @@ toBytes path args = processBytes path args Stream.nil
 --
 {-# INLINE toBytes_ #-}
 toBytes_ ::
-    (IsStream t, MonadAsync m, MonadCatch m)
+    (IsStream t, MonadAsync m, MonadCatch m, Functor (t m))
     => FilePath     -- ^ Executable path
     -> [String]     -- ^ Arguments
     -> t m Word8    -- ^ Output Stream
@@ -380,7 +380,7 @@ toChunks path args = processChunks path args Stream.nil
 --
 {-# INLINE toChunks_ #-}
 toChunks_ ::
-    (IsStream t, MonadAsync m, MonadCatch m)
+    (IsStream t, MonadAsync m, MonadCatch m, Functor (t m))
     => FilePath             -- ^ Executable path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Output Stream
