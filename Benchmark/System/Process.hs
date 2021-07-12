@@ -1,7 +1,9 @@
 {-# LANGUAGE  ScopedTypeVariables #-}
+
 module Main (main) where
 
 import Control.Exception (finally)
+import Data.Either (isRight, fromRight, isLeft, fromLeft)
 import Data.Word (Word8)
 import Gauge (defaultMain, bench, nfIO)
 import System.Directory (removeFile, findExecutable)
@@ -16,10 +18,20 @@ import System.Process (proc, createProcess, waitForProcess, callCommand)
 import qualified Streamly.Prelude as S
 import qualified Streamly.System.Process as Proc
 import qualified Streamly.Data.Fold as FL
+import qualified Streamly.FileSystem.Handle as FH
 
 -- Internal imports
 import qualified Streamly.Internal.FileSystem.Handle
     as FH (toBytes, toChunks, putBytes, putChunks)
+
+-- XXX replace with streamly versions once they are fixed
+{-# INLINE rights #-}
+rights :: (S.IsStream t, Monad m, Functor (t m)) => t m (Either a b) -> t m b
+rights = fmap (fromRight undefined) . S.filter isRight
+
+{-# INLINE lefts #-}
+lefts :: (S.IsStream t, Monad m, Functor (t m)) => t m (Either a b) -> t m a
+lefts = fmap (fromLeft undefined) . S.filter isLeft
 
 -------------------------------------------------------------------------------
 -- Constants and utils
@@ -123,42 +135,45 @@ deleteFiles = do
 
 toBytes :: String-> Handle -> IO ()
 toBytes catPath outH =
-    FH.putBytes outH $ Proc.toBytes catPath [largeByteFile]
+    FH.putBytes outH
+        $ rights
+        $ Proc.toBytes catPath [largeByteFile]
 
 toChunks :: String -> Handle -> IO ()
 toChunks catPath hdl =
-    FH.putChunks hdl $ Proc.toChunks catPath [largeByteFile]
-
-processBytes_ :: String -> Handle -> IO ()
-processBytes_ trPath outputHdl = do
-    inputHdl <- openFile largeCharFile ReadMode
-    FH.putBytes outputHdl $
-        Proc.processBytes_
-            trPath
-            ["[a-z]", "[A-Z]"]
-            (FH.toBytes inputHdl)
-    hClose inputHdl
+    FH.putChunks hdl
+        $ rights
+        $ Proc.toChunks catPath [largeByteFile]
 
 processBytes :: String-> Handle -> IO ()
 processBytes trPath outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
-    FH.putBytes outputHdl $
-        Proc.processBytes
+    _ <- S.fold (FL.partition (FH.write outputHdl) (FH.write outputHdl))
+        $ Proc.processBytes
             trPath
             ["[a-z]", "[A-Z]"]
-            FL.drain
-            (FH.toBytes inputHdl)
+        $ FH.toBytes inputHdl
+    hClose inputHdl
+
+processBytes_ :: String-> Handle -> IO ()
+processBytes_ trPath outputHdl = do
+    inputHdl <- openFile largeCharFile ReadMode
+    FH.putBytes outputHdl
+        $ Proc.processBytes_
+            trPath
+            ["[a-z]", "[A-Z]"]
+        $ FH.toBytes inputHdl
     hClose inputHdl
 
 processBytesToStderr :: Handle -> IO ()
 processBytesToStderr outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
-    FH.putBytes outputHdl $
-        Proc.processBytes
+    FH.putBytes outputHdl
+        $ lefts
+        $ Proc.processBytes
             trToStderr
             ["[a-z]", "[A-Z]"]
-            FL.drain
-            (FH.toBytes inputHdl)
+        $ FH.toBytes inputHdl
     hClose inputHdl
 
 processChunks_ :: String -> Handle -> IO ()
@@ -168,28 +183,31 @@ processChunks_ trPath outputHdl = do
         Proc.processChunks_
             trPath
             ["[a-z]", "[A-Z]"]
-            (FH.toChunks inputHdl)
+        $ FH.toChunks inputHdl
     hClose inputHdl
 
 processChunks :: String -> Handle -> IO ()
 processChunks trPath outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
-    FH.putChunks outputHdl $
-        Proc.processChunks
+    _ <- S.fold
+            (FL.partition
+                (FH.writeChunks outputHdl) (FH.writeChunks outputHdl)
+            )
+        $ Proc.processChunks
             trPath
             ["[a-z]", "[A-Z]"]
-            FL.drain
             (FH.toChunks inputHdl)
     hClose inputHdl
 
 processChunksToStderr :: Handle -> IO ()
 processChunksToStderr outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
-    FH.putChunks outputHdl $
-        Proc.processChunks
+    FH.putChunks outputHdl
+        $ lefts
+        $ Proc.processChunks
             trToStderr
             ["[a-z]", "[A-Z]"]
-            FL.drain (FH.toChunks inputHdl)
+            (FH.toChunks inputHdl)
     hClose inputHdl
 
 -------------------------------------------------------------------------------
