@@ -50,14 +50,16 @@ module Streamly.System.Process
     ( ProcessFailure (..)
 
     -- * Generation
+    , toBytes_
     , toBytes
+    , toChunks_
     , toChunks
 
     -- * Transformation
-    , processBytes
     , processBytes_
-    , processChunks
+    , processBytes
     , processChunks_
+    , processChunks
     )
 where
 
@@ -65,6 +67,7 @@ import Control.Exception (Exception, displayException)
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Either (isRight, fromRight)
+import Data.Function ((&))
 import Data.Word (Word8)
 import Streamly.Data.Array.Foreign (Array)
 import Streamly.Prelude (MonadAsync, parallel, IsStream, adapt)
@@ -335,6 +338,18 @@ toBytes ::
     -> t m (Either Word8 Word8)    -- ^ Output Stream
 toBytes path args = processBytes path args Stream.nil
 
+-- | Like 'toBytes' but ignores the @stderr@ stream.
+--
+-- >>> toBytes_ path args = toBytes path args & Stream.rights
+--
+{-# INLINE toBytes_ #-}
+toBytes_ ::
+    (IsStream t, MonadAsync m, MonadCatch m)
+    => FilePath     -- ^ Executable path
+    -> [String]     -- ^ Arguments
+    -> t m Word8    -- ^ Output Stream
+toBytes_ path args = toBytes path args & rights
+
 -- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
 -- of @Word8@.
 --
@@ -348,6 +363,8 @@ toBytes path args = processBytes path args Stream.nil
 --
 -- >>> toChunks path args = Process.processChunks path args Stream.nil
 --
+-- Prefer 'toChunks' over 'toBytes' when performance matters.
+--
 -- @since 0.1.0
 {-# INLINE toChunks #-}
 toChunks ::
@@ -356,3 +373,15 @@ toChunks ::
     -> [String]             -- ^ Arguments
     -> t m (Either (Array Word8) (Array Word8))    -- ^ Output Stream
 toChunks path args = processChunks path args Stream.nil
+
+-- | Like 'toChunks' but ignores the @stderr@ stream.
+--
+-- >>> toChunks_ path args = toChunks path args & Stream.rights
+--
+{-# INLINE toChunks_ #-}
+toChunks_ ::
+    (IsStream t, MonadAsync m, MonadCatch m)
+    => FilePath             -- ^ Executable path
+    -> [String]             -- ^ Arguments
+    -> t m (Array Word8)    -- ^ Output Stream
+toChunks_ path args = toChunks path args & rights
