@@ -2,14 +2,12 @@
 
 module Main where
 
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List ((\\))
 import Data.Word (Word8)
 import Control.Exception (Exception)
 import Control.Monad (unless)
 import Control.Monad.Catch (throwM, catch)
 import Control.Monad.IO.Class (MonadIO(..))
-import Streamly.Data.Fold (Fold)
 import Streamly.System.Process (ProcessFailure (..))
 import System.Directory (removeFile, findExecutable)
 import System.IO (IOMode(..), openFile, hClose)
@@ -25,14 +23,13 @@ import Test.QuickCheck
     )
 import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
 
-import qualified Streamly.Data.Fold as FL
 import qualified Streamly.Prelude as S
 import qualified Streamly.System.Process as Proc
 
 -- Internal imports
 import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as AS (arraysOf, concat)
-import qualified Streamly.Internal.Data.Stream.IsStream as S (nilM)
+import qualified Streamly.Internal.Data.Stream.IsStream as S (nilM, lefts, rights)
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, toBytes)
 
 newtype SimpleError = SimpleError String
@@ -171,34 +168,13 @@ generateCharFile numCharInCharFile = do
     FH.putBytes handle (S.replicate numCharInCharFile _a)
     hClose handle
 
-writeToIoRefFold ::
-    MonadIO m
-    => IORef [Word8]
-    -> Fold m Word8 ()
-writeToIoRefFold ioRef = FL.rmapM extract (FL.foldlM' step initial)
-
-    where
-
-    step _ newEle = do
-        list <- liftIO $ readIORef ioRef
-        let newList = newEle : list
-        liftIO $ writeIORef ioRef newList
-        return ()
-
-    initial = liftIO $ writeIORef ioRef []
-
-    extract _ = do
-        list <- liftIO $ readIORef ioRef
-        let reverseList = Prelude.reverse list
-        liftIO $ writeIORef ioRef reverseList
-
 toBytes1 :: Property
 toBytes1 =
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
         monadicIO $ do
             catBinary <- run ioCatBinary
             let
-                genStrm = Proc.toBytes catBinary [charFile]
+                genStrm = S.rights $ Proc.toBytes catBinary [charFile]
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
@@ -231,7 +207,7 @@ toChunks1 =
         monadicIO $ do
             catBinary <- run ioCatBinary
             let
-                genStrm = Proc.toChunks catBinary [charFile]
+                genStrm = S.rights $ Proc.toChunks catBinary [charFile]
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
@@ -362,10 +338,10 @@ processBytes1 =
             trBinary <- run ioTrBinary
             let
                 inputStream = S.fromList ls
-                genStrm = Proc.processBytes
+                genStrm = S.rights $ Proc.processBytes
                             trBinary
                             ["[a-z]", "[A-Z]"]
-                            FL.drain inputStream
+                            inputStream
                 charUpperStrm = S.map toUpper inputStream
 
             genList <- run $ S.toList genStrm
@@ -376,20 +352,17 @@ processBytes2 :: Property
 processBytes2 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            listIoRef <- run $ newIORef []
             let
                 inputStream = S.fromList ls
-                outStream =
+                outStream = S.lefts $
                     Proc.processBytes
                     executableFile
                     ["[a-z]", "[A-Z]"]
-                    (writeToIoRefFold listIoRef)
                     inputStream
 
                 charUpperStrm = S.map toUpper inputStream
 
-            run $ S.drain outStream
-            genList <- run $ readIORef listIoRef
+            genList <- run $ S.toList outStream
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
@@ -398,7 +371,7 @@ processBytes3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.processBytes executableFileFail [] FL.drain S.nil
+        S.drain $ Proc.processBytes executableFileFail [] S.nil
         return False
 
     failAction (ProcessFailure exitCode) =
@@ -415,7 +388,6 @@ processBytes4 = monadicIO $ run checkFailAction
             Proc.processBytes
             executableFilePass
             []
-            FL.drain
             (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
@@ -432,11 +404,10 @@ processChunks1 =
             let
                 inputStream = S.fromList ls
 
-                genStrm = AS.concat $
+                genStrm = AS.concat $ S.rights $
                     Proc.processChunks
                     trBinary
                     ["[a-z]", "[A-Z]"]
-                    FL.drain
                     (AS.arraysOf arrayChunkElem inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
@@ -449,20 +420,17 @@ processChunks2 :: Property
 processChunks2 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            listIoRef <- run $ newIORef []
             let
                 inputStream = S.fromList ls
-                outStream =
+                outStream = AS.concat $ S.lefts $
                     Proc.processChunks
                     executableFile
                     ["[a-z]", "[A-Z]"]
-                    (writeToIoRefFold listIoRef)
                     (AS.arraysOf arrayChunkElem inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
 
-            run $ S.drain outStream
-            genList <- run $ readIORef listIoRef
+            genList <- run $ S.toList outStream
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
@@ -471,7 +439,7 @@ processChunks3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.processChunks executableFileFail [] FL.drain S.nil
+        S.drain $ Proc.processChunks executableFileFail [] S.nil
         return False
 
     failAction (ProcessFailure exitCode) =
@@ -488,7 +456,6 @@ processChunks4 = monadicIO $ run checkFailAction
             Proc.processChunks
             executableFilePass
             []
-            FL.drain
             (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
