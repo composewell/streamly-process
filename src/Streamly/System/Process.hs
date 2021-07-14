@@ -170,12 +170,12 @@ wait procHandle = liftIO $ do
 -- to read end to process's output, handle to read end to process's standard
 -- error and process handle of the process
 --
-openProcErr ::
+createProc ::
     FilePath                                -- ^ Path to Executable
     -> [String]                             -- ^ Arguments
     -> IO (Handle, Handle, Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
-openProcErr path args = do
+createProc path args = do
     let spec = proc path args
         spec1 =
             spec
@@ -201,7 +201,7 @@ processChunks path args input = Stream.bracket alloc cleanup run
 
     where
 
-    alloc = liftIO $ openProcErr path args
+    alloc = liftIO $ createProc path args
 
     cleanup (stdinH, stdoutH, stderrH, procH) = do
         liftIO $ hClose stdinH >> hClose stdoutH >> hClose stderrH
