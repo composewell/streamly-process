@@ -39,16 +39,16 @@ module Streamly.System.Process
     ( ProcessFailure (..)
 
     -- * Generation
-    , toBytes_
     , toBytes
-    , toChunks_
+    , toBytes'
     , toChunks
+    , toChunks'
 
     -- * Transformation
-    , processBytes_
     , processBytes
-    , processChunks_
+    , processBytes'
     , processChunks
+    , processChunks'
     )
 where
 
@@ -170,12 +170,12 @@ wait procHandle = liftIO $ do
 -- to read end to process's output, handle to read end to process's standard
 -- error and process handle of the process
 --
-createProc ::
+createProc' ::
     FilePath                                -- ^ Path to Executable
     -> [String]                             -- ^ Arguments
     -> IO (Handle, Handle, Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
-createProc path args = do
+createProc' path args = do
     let spec = proc path args
         spec1 =
             spec
@@ -190,18 +190,18 @@ createProc path args = do
         <- createProcess spec1
     return (stdinH, stdoutH, stderrH, procH)
 
-{-# INLINE processChunks #-}
-processChunks ::
+{-# INLINE processChunks' #-}
+processChunks' ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
-processChunks path args input = Stream.bracket alloc cleanup run
+processChunks' path args input = Stream.bracket alloc cleanup run
 
     where
 
-    alloc = liftIO $ createProc path args
+    alloc = liftIO $ createProc' path args
 
     cleanup (stdinH, stdoutH, stderrH, procH) = do
         liftIO $ hClose stdinH >> hClose stdoutH >> hClose stderrH
@@ -227,7 +227,7 @@ processChunks path args input = Stream.bracket alloc cleanup run
             `parallel` runStderr stderrH
             `parallel` runStdout stdoutH
 
--- | @processBytes path args input@ runs the executable at @path@ using @args@
+-- | @processBytes' path args input@ runs the executable at @path@ using @args@
 -- as arguments and @input@ stream as its standard input.  The error stream of
 -- the executable is presented as 'Left' values in the resulting stream and
 -- output stream as 'Right' values.
@@ -238,25 +238,25 @@ processChunks path args input = Stream.bracket alloc cleanup run
 -- world" | tr [:lower:] [:upper:]@:
 --
 -- >>> :{
---    Process.processBytes "/bin/echo" ["hello world"] Stream.nil
+--    Process.processBytes' "/bin/echo" ["hello world"] Stream.nil
 --  & Stream.rights
---  & Process.processBytes "/bin/tr" ["[:lower:]", "[:upper:]"]
+--  & Process.processBytes' "/bin/tr" ["[:lower:]", "[:upper:]"]
 --  & Stream.rights
 --  & Stream.fold Stdio.write
 --  :}
 --HELLO WORLD
 --
 -- @since 0.1.0
-{-# INLINE processBytes #-}
-processBytes ::
+{-# INLINE processBytes' #-}
+processBytes' ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath         -- ^ Executable path
     -> [String]         -- ^ Arguments
     -> t m Word8        -- ^ Input Stream
     -> t m (Either Word8 Word8) -- ^ Output Stream
-processBytes path args input =
+processBytes' path args input =
     let input1 = ArrayStream.arraysOf defaultChunkSize input
-        output = processChunks path args input1
+        output = processChunks' path args input1
      in unfoldManyEither Array.read output
 
 -- |
@@ -268,14 +268,14 @@ processBytes path args input =
 -- reason
 --
 -- @since 0.1.0
-{-# INLINE processBytes_ #-}
-processBytes_ ::
+{-# INLINE processBytes #-}
+processBytes ::
     (IsStream t, MonadCatch m, MonadAsync m, Functor (t m))
     => FilePath     -- ^ Path to executable
     -> [String]     -- ^ Arguments to pass to executable
     -> t m Word8    -- ^ Input Stream
     -> t m Word8    -- ^ Output Stream
-processBytes_ path args = rights . processBytes path args
+processBytes path args = rights . processBytes' path args
 
 -- |
 -- Runs a process specified by the path to executable, arguments
@@ -288,16 +288,16 @@ processBytes_ path args = rights . processBytes path args
 -- reason
 --
 -- @since 0.1.0
-{-# INLINE processChunks_ #-}
-processChunks_ ::
+{-# INLINE processChunks #-}
+processChunks ::
     (IsStream t, MonadCatch m, MonadAsync m, Functor (t m))
     => FilePath             -- ^ Path to executable
     -> [String]             -- ^ Arguments to pass to executable
     -> t m (Array Word8)    -- ^ Input Stream
     -> t m (Array Word8)    -- ^ Output Stream
-processChunks_ path args = rights . processChunks path args
+processChunks path args = rights . processChunks' path args
 
--- | @toBytes path args@ runs the executable at @path@ using @args@ as
+-- | @toBytes' path args@ runs the executable at @path@ using @args@ as
 -- arguments and returns a stream of 'Either' bytes. The 'Left' values are from
 -- @stderr@ and the 'Right' values are from @stdout@ of the executable.
 --
@@ -309,68 +309,68 @@ processChunks_ path args = rights . processChunks path args
 --
 --
 -- >>> :{
---   Process.toBytes "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
+--   Process.toBytes' "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
 -- & Stream.fold (Fold.partition Stdio.writeErr Stdio.write)
 -- :}
 -- world
 -- hello
 -- ((),())
 --
--- >>> toBytes path args = Process.processBytes path args Stream.nil
+-- >>> toBytes' path args = Process.processBytes' path args Stream.nil
 --
 -- @since 0.1.0
-{-# INLINE toBytes #-}
-toBytes ::
+{-# INLINE toBytes' #-}
+toBytes' ::
     (IsStream t, MonadAsync m, MonadCatch m)
     => FilePath     -- ^ Executable path
     -> [String]     -- ^ Arguments
     -> t m (Either Word8 Word8)    -- ^ Output Stream
-toBytes path args = processBytes path args Stream.nil
+toBytes' path args = processBytes' path args Stream.nil
 
 -- | Like 'toBytes' but ignores the @stderr@ stream.
 --
--- >>> toBytes_ path args = toBytes path args & Stream.rights
+-- >>> toBytes path args = toBytes' path args & Stream.rights
 --
-{-# INLINE toBytes_ #-}
-toBytes_ ::
+{-# INLINE toBytes #-}
+toBytes ::
     (IsStream t, MonadAsync m, MonadCatch m, Functor (t m))
     => FilePath     -- ^ Executable path
     -> [String]     -- ^ Arguments
     -> t m Word8    -- ^ Output Stream
-toBytes_ path args = toBytes path args & rights
+toBytes path args = toBytes' path args & rights
 
 -- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
 -- of @Word8@.
 --
 -- >>> :{
---   Process.toChunks "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
+--   Process.toChunks' "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
 -- & Stream.fold (Fold.partition Stdio.writeErrChunks Stdio.writeChunks)
 -- :}
 -- world
 -- hello
 -- ((),())
 --
--- >>> toChunks path args = Process.processChunks path args Stream.nil
+-- >>> toChunks' path args = Process.processChunks' path args Stream.nil
 --
 -- Prefer 'toChunks' over 'toBytes' when performance matters.
 --
 -- @since 0.1.0
-{-# INLINE toChunks #-}
-toChunks ::
+{-# INLINE toChunks' #-}
+toChunks' ::
     (IsStream t, MonadAsync m, MonadCatch m)
     => FilePath             -- ^ Executable path
     -> [String]             -- ^ Arguments
     -> t m (Either (Array Word8) (Array Word8))    -- ^ Output Stream
-toChunks path args = processChunks path args Stream.nil
+toChunks' path args = processChunks' path args Stream.nil
 
 -- | Like 'toChunks' but ignores the @stderr@ stream.
 --
--- >>> toChunks_ path args = toChunks path args & Stream.rights
+-- >>> toChunks path args = toChunks' path args & Stream.rights
 --
-{-# INLINE toChunks_ #-}
-toChunks_ ::
+{-# INLINE toChunks #-}
+toChunks ::
     (IsStream t, MonadAsync m, MonadCatch m, Functor (t m))
     => FilePath             -- ^ Executable path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Output Stream
-toChunks_ path args = toChunks path args & rights
+toChunks path args = toChunks' path args & rights
