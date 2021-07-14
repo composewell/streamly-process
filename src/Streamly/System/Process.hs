@@ -11,10 +11,24 @@
 -- used like regular Haskell stream functions connecting them into a stream
 -- pipeline consisting of Haskell functions or other OS processes.
 --
--- The composition is similar to a Posix shell pipeline except that we use @&@
--- instead of @|@. Also note that like the @pipefail@ option in shells,
--- exceptions are propagated if any of the stages fail.
+-- Processes can be composed in a streaming pipeline just like a Posix shell
+-- command pipeline except that we use @&@ instead of @|@. Also note that like
+-- the @pipefail@ option in shells, exceptions are propagated if any of the
+-- stages fail.
 --
+-- The default attributes of the new process created by the APIs in this module
+-- are described below:
+--
+-- * The following attributes are inherited from the parent:
+--
+--     * Current working directory
+--     * Environment
+--     * Process group
+--     * Process uid and gid
+--     * Signal handlers
+--     * Terminal (Session)
+--
+-- * All fds except stdin, stdout and stderr are closed in the child
 
 -- TODO:
 --
@@ -67,8 +81,8 @@ import System.Process
     , CreateProcess(..)
     , StdStream (..)
     , createProcess
-    , proc
     , waitForProcess
+    , CmdSpec(..)
     )
 
 import qualified Streamly.Data.Array.Foreign as Array
@@ -161,33 +175,52 @@ wait procHandle = liftIO $ do
         ExitSuccess -> return ()
         ExitFailure exitCodeInt -> throwM $ ProcessFailure exitCodeInt
 
--- |
--- Creates a process using the path to executable and arguments, then
--- builds three pipes, one whose read end is made the process's standard
--- input, and another whose write end is made the process's standard
--- output, and the final one's write end is made the process's standard error.
--- The function returns the handle to write end to the process's input, handle
--- to read end to process's output, handle to read end to process's standard
--- error and process handle of the process
+-- Set everything explicitly so that we are immune to changes upstream.
+procAttrs :: FilePath -> [String] -> CreateProcess
+procAttrs path args = CreateProcess
+    { cmdspec = RawCommand path args
+    , cwd = Nothing -- inherit
+    , env = Nothing -- inherit
+
+    -- File descriptors
+    , std_in = CreatePipe
+    , std_out = CreatePipe
+    , std_err = Inherit
+    , close_fds = True  -- False?
+
+    -- Session/group/setuid/setgid
+    , create_group = False
+    , child_user = Nothing  -- Posix only
+    , child_group = Nothing  -- Posix only
+
+    -- Signals (Posix only) behavior
+    -- Reset SIGINT (Ctrl-C) and SIGQUIT (Ctrl-\) to default handlers.
+    , delegate_ctlc = False
+
+    -- Terminal behavior
+    , new_session = False  -- Posix only
+    , detach_console = False -- Windows only
+    , create_new_console = False -- Windows Only
+
+    -- Added by commit 6b8ffe2ec3d115df9ccc047599545ca55c393005
+    , use_process_jobs = True -- Windows only
+    }
+
+pipeStdErr :: CreateProcess -> CreateProcess
+pipeStdErr cfg = cfg { std_err = CreatePipe }
+
+-- | Creates a system process from an executable path and arguments. For the
+-- default attributes used to create the process see 'procAttrs'.
 --
 createProc' ::
-    FilePath                                -- ^ Path to Executable
-    -> [String]                             -- ^ Arguments
+       (CreateProcess -> CreateProcess) -- ^ Process attribute modifier
+    -> FilePath                         -- ^ Executable path
+    -> [String]                         -- ^ Arguments
     -> IO (Handle, Handle, Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
-createProc' path args = do
-    let spec = proc path args
-        spec1 =
-            spec
-                { std_in = CreatePipe
-                , std_out = CreatePipe
-                , std_err = CreatePipe
-                , close_fds = True
-                , use_process_jobs = True
-                }
-
+createProc' modCfg path args = do
     (Just stdinH, Just stdoutH, Just stderrH, procH)
-        <- createProcess spec1
+        <- createProcess $ modCfg $ procAttrs path args
     return (stdinH, stdoutH, stderrH, procH)
 
 {-# INLINE processChunks' #-}
@@ -201,7 +234,7 @@ processChunks' path args input = Stream.bracket alloc cleanup run
 
     where
 
-    alloc = liftIO $ createProc' path args
+    alloc = liftIO $ createProc' pipeStdErr path args
 
     cleanup (stdinH, stdoutH, stderrH, procH) = do
         liftIO $ hClose stdinH >> hClose stdoutH >> hClose stderrH
