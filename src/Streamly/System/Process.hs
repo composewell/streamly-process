@@ -18,31 +18,20 @@
 
 -- TODO:
 --
--- 1) Provide a function "cmd :: String -> (FilePath, [String])" and change the
--- signatures to something like "toBytes :: (FilePath, [String]) -> ...", so
--- that we can use something like @toBytes (cmd "ls -al")@.
+-- - Need a way to specify additional parameters for process creation.
+-- Possibly use something like @processBytesWith spec@ etc.
 --
--- 2) Need a way to specify additional parameters for process creation.
--- Possibly use something like @processBytesWith spec@ etc. Another way is to
--- use a StateT like environment (shell environment).
---
--- 3) Need a way to access the pid and manage the processes and process groups.
+-- - Need a way to access the pid and manage the processes and process groups.
 -- We can treat the processes in the same way as we treat threads. We can
 -- compose processes in parallel, and cleanup can happen in the same way as
--- tids are cleaned up.
+-- tids are cleaned up. But do we need this when we have threads anyway?
 --
--- 4) Use unfolds for generation?
+-- - Use unfolds for generation?
 --
--- 5) Folds for composing process sinks? Input may be taken as input of the
+-- - Folds for composing process sinks? Input may be taken as input of the
 -- fold and the output of the process can be consumed by another fold.
 --
--- 6) Replace FilePath with a typed path.
---
--- 7) iterateBytes API that feeds back the error to the input of the process.
---
--- 8) run a command on a remote machine using Inet.TCP. We can send the exit
--- failure code using another Left constructor. We can also have a ssh tunnel
--- based API.
+-- - Replace FilePath with a typed path.
 --
 {-# LANGUAGE FlexibleContexts #-}
 
