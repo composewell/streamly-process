@@ -12,7 +12,7 @@ license-file:        LICENSE
 author:              Composewell Technologies
 maintainer:          streamly@composewell.com
 copyright:           Composewell Technologies
-category:            Control, Concurrency, Streaming, Processes
+category:            Streamly, Streaming, System
 stability:           Experimental
 build-type:          Simple
 extra-source-files:
