@@ -133,33 +133,33 @@ deleteFiles = do
 -- Benchmark functions
 -------------------------------------------------------------------------------
 
-toBytes :: String-> Handle -> IO ()
-toBytes catPath outH =
+toBytes' :: String-> Handle -> IO ()
+toBytes' catPath outH =
     FH.putBytes outH
         $ rights
-        $ Proc.toBytes catPath [largeByteFile]
+        $ Proc.toBytes' catPath [largeByteFile]
 
-toChunks :: String -> Handle -> IO ()
-toChunks catPath hdl =
+toChunks' :: String -> Handle -> IO ()
+toChunks' catPath hdl =
     FH.putChunks hdl
         $ rights
-        $ Proc.toChunks catPath [largeByteFile]
+        $ Proc.toChunks' catPath [largeByteFile]
 
-processBytes :: String-> Handle -> IO ()
-processBytes trPath outputHdl = do
+processBytes' :: String-> Handle -> IO ()
+processBytes' trPath outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     _ <- S.fold (FL.partition (FH.write outputHdl) (FH.write outputHdl))
-        $ Proc.processBytes
+        $ Proc.processBytes'
             trPath
             ["[a-z]", "[A-Z]"]
         $ FH.toBytes inputHdl
     hClose inputHdl
 
-processBytes_ :: String-> Handle -> IO ()
-processBytes_ trPath outputHdl = do
+processBytes :: String-> Handle -> IO ()
+processBytes trPath outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     FH.putBytes outputHdl
-        $ Proc.processBytes_
+        $ Proc.processBytes
             trPath
             ["[a-z]", "[A-Z]"]
         $ FH.toBytes inputHdl
@@ -170,30 +170,30 @@ processBytesToStderr outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     FH.putBytes outputHdl
         $ lefts
-        $ Proc.processBytes
+        $ Proc.processBytes'
             trToStderr
             ["[a-z]", "[A-Z]"]
         $ FH.toBytes inputHdl
     hClose inputHdl
 
-processChunks_ :: String -> Handle -> IO ()
-processChunks_ trPath outputHdl = do
+processChunks :: String -> Handle -> IO ()
+processChunks trPath outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     FH.putChunks outputHdl $
-        Proc.processChunks_
+        Proc.processChunks
             trPath
             ["[a-z]", "[A-Z]"]
         $ FH.toChunks inputHdl
     hClose inputHdl
 
-processChunks :: String -> Handle -> IO ()
-processChunks trPath outputHdl = do
+processChunks' :: String -> Handle -> IO ()
+processChunks' trPath outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     _ <- S.fold
             (FL.partition
                 (FH.writeChunks outputHdl) (FH.writeChunks outputHdl)
             )
-        $ Proc.processChunks
+        $ Proc.processChunks'
             trPath
             ["[a-z]", "[A-Z]"]
             (FH.toChunks inputHdl)
@@ -204,7 +204,7 @@ processChunksToStderr outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     FH.putChunks outputHdl
         $ lefts
-        $ Proc.processChunks
+        $ Proc.processChunks'
             trToStderr
             ["[a-z]", "[A-Z]"]
             (FH.toChunks inputHdl)
@@ -224,13 +224,13 @@ main = do
     putStrLn "Running benchmarks..."
 
     defaultMain
-        [ bench "toBytes" $ nfIO $ toBytes catPath nullH
-        , bench "toChunks" $ nfIO $ toChunks catPath nullH
-        , bench "processBytes_ tr" $ nfIO $ processBytes_ trPath nullH
+        [ bench "toBytes'" $ nfIO $ toBytes' catPath nullH
+        , bench "toChunks'" $ nfIO $ toChunks' catPath nullH
         , bench "processBytes tr" $ nfIO $ processBytes trPath nullH
+        , bench "processBytes' tr" $ nfIO $ processBytes' trPath nullH
         , bench "processBytesToStderr tr" $ nfIO $ processBytesToStderr nullH
-        , bench "processChunks_ tr" $ nfIO (processChunks_ trPath nullH)
         , bench "processChunks tr" $ nfIO (processChunks trPath nullH)
+        , bench "processChunks' tr" $ nfIO (processChunks' trPath nullH)
         , bench "processChunksToStderr" $ nfIO $ processChunksToStderr nullH
         ] `finally` (do
             putStrLn "cleanup ..."
