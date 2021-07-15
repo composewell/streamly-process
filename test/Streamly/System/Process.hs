@@ -79,8 +79,8 @@ minNumChar = 1
 maxNumChar :: Int
 maxNumChar = 100 * 1024
 
-arrayChunkElem :: Int
-arrayChunkElem = 100
+arrayChunkSize :: Int
+arrayChunkSize = 100
 
 executableFile :: FilePath
 #if mingw32_HOST_OS == 1
@@ -294,7 +294,7 @@ processChunks1 =
                     Proc.processChunks
                     trBinary
                     ["[a-z]", "[A-Z]"]
-                    (AS.arraysOf arrayChunkElem inputStream)
+                    (AS.arraysOf arrayChunkSize inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
 
@@ -409,7 +409,7 @@ processChunks'1 =
                     Proc.processChunks'
                     trBinary
                     ["[a-z]", "[A-Z]"]
-                    (AS.arraysOf arrayChunkElem inputStream)
+                    (AS.arraysOf arrayChunkSize inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
 
@@ -427,7 +427,7 @@ processChunks'2 =
                     Proc.processChunks'
                     executableFile
                     ["[a-z]", "[A-Z]"]
-                    (AS.arraysOf arrayChunkElem inputStream)
+                    (AS.arraysOf arrayChunkSize inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
 
