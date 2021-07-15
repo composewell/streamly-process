@@ -2,7 +2,9 @@
 
 module Main where
 
+import Data.Function ((&))
 import Data.List ((\\))
+import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
 import Control.Exception (Exception)
 import Control.Monad (unless)
@@ -23,6 +25,7 @@ import Test.QuickCheck
     )
 import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
 
+import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Prelude as S
 import qualified Streamly.System.Process as Proc
 
@@ -50,19 +53,12 @@ _A = 65
 _Z :: Word8
 _Z = 90
 
-ioCatBinary :: IO FilePath
-ioCatBinary = do
-    maybeCatBinary <- findExecutable "cat"
-    case maybeCatBinary of
-        Just catBinary -> return catBinary
-        _ -> error "cat Binary Not Found"
-
-ioTrBinary :: IO FilePath
-ioTrBinary = do
-    maybeTrBinary <- findExecutable "tr"
-    case maybeTrBinary of
-        Just trBinary -> return trBinary
-        _ -> error "tr Binary Not Found"
+which :: String -> IO FilePath
+which cmd = do
+    r <- findExecutable cmd
+    case r of
+        Just path -> return path
+        _ -> error $ "Required command " ++ cmd ++ " not found"
 
 failErrorMessage :: String
 failErrorMessage = "fail"
@@ -82,6 +78,7 @@ maxNumChar = 100 * 1024
 arrayChunkSize :: Int
 arrayChunkSize = 100
 
+-- XXX Commit these files to repo
 executableFile :: FilePath
 #if mingw32_HOST_OS == 1
 executableFile = "./writeTrToError.bat"
@@ -173,7 +170,7 @@ toBytes1 :: Property
 toBytes1 =
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
         monadicIO $ do
-            catBinary <- run ioCatBinary
+            catBinary <- run $ which "cat"
             let
                 genStrm = S.rights $ Proc.toBytes' catBinary [charFile]
 
@@ -206,7 +203,7 @@ toChunks1 :: Property
 toChunks1 =
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
         monadicIO $ do
-            catBinary <- run ioCatBinary
+            catBinary <- run $ which "cat"
             let
                 genStrm = S.rights $ Proc.toChunks' catBinary [charFile]
 
@@ -239,7 +236,7 @@ processBytes1 :: Property
 processBytes1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            trBinary <- run ioTrBinary
+            trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
                 genStrm = Proc.processBytes
@@ -282,11 +279,12 @@ processBytes3 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-processChunks1 :: Property
-processChunks1 =
+-- Termination on input termination
+processChunksConsumeAllInput :: Property
+processChunksConsumeAllInput =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            trBinary <- run ioTrBinary
+            trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
 
@@ -302,24 +300,45 @@ processChunks1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-processChunks2 :: Property
-processChunks2 = monadicIO $ run checkFailAction
+processChunksConsumePartialInput :: Property
+processChunksConsumePartialInput =
+    forAll (listOf (choose(9, _z))) $ \ls ->
+        monadicIO $ do
+            path <- run $ which "head"
+            let
+                inputStream = S.fromList ls
+
+                procOutput = AS.concat $
+                    Proc.processChunks
+                    path
+                    ["-n", "1"]
+                    (AS.arraysOf arrayChunkSize inputStream)
+
+                headLine =
+                      S.splitWithSuffix (== 10) Fold.toList inputStream
+                    & S.head
+
+            procList <- run $ S.toList procOutput
+            expectedList <- run $ fmap (fromMaybe []) headLine
+            listEquals (==) procList expectedList
+
+processChunksProcessFailure :: Property
+processChunksProcessFailure = monadicIO $ run $ catch runProcess checkExitCode
+
     where
 
-    action = do
+    runProcess = do
         S.drain $ Proc.processChunks executableFileFail [] S.nil
         return False
 
-    failAction (ProcessFailure exitCode) =
-        return (exitCode == 1)
+    checkExitCode (ProcessFailure exitCode) = return (exitCode == 1)
 
-    checkFailAction = catch action failAction
+processChunksInputFailure :: Property
+processChunksInputFailure = monadicIO $ run $ catch runProcess checkException
 
-processChunks3 :: Property
-processChunks3 = monadicIO $ run checkFailAction
     where
 
-    action = do
+    runProcess = do
         S.drain $
             Proc.processChunks
             executableFilePass
@@ -327,16 +346,13 @@ processChunks3 = monadicIO $ run checkFailAction
             (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
-    failAction (SimpleError err) =
-        return (err == failErrorMessage)
-
-    checkFailAction = catch action failAction
+    checkException (SimpleError err) = return (err == failErrorMessage)
 
 processBytes'1 :: Property
 processBytes'1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            trBinary <- run ioTrBinary
+            trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
                 genStrm = S.rights $ Proc.processBytes'
@@ -401,7 +417,7 @@ processChunks'1 :: Property
 processChunks'1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            trBinary <- run ioTrBinary
+            trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
 
@@ -472,38 +488,43 @@ main = do
         describe "Streamly.System.Process" $ do
             -- Keep the tests in dependency order so that we test the basic
             -- things first.
-            prop
-                "AS.concat $ processChunks' tr = map toUpper"
-                processChunks'1
-            prop
-                "error stream of processChunks' tr = map toUpper"
-                processChunks'2
-            prop "processChunks' on failing executable" processChunks'3
-            prop "processChunks' using error stream" processChunks'4
+            describe "processChunks'" $ do
+                prop
+                    "AS.concat $ processChunks' tr = map toUpper"
+                    processChunks'1
+                prop
+                    "error stream of processChunks' tr = map toUpper"
+                    processChunks'2
+                prop "processChunks' on failing executable" processChunks'3
+                prop "processChunks' using error stream" processChunks'4
 
-            prop
-                "AS.concat $ processChunks tr = map toUpper"
-                processChunks1
-            prop "processChunks on failing executable" processChunks2
-            prop "processChunks using error stream" processChunks3
+            describe "processChunks" $ do
+                prop "consumeAllInput" processChunksConsumeAllInput
+                prop "consumePartialInput" processChunksConsumePartialInput
+                prop "ProcessFailure" processChunksProcessFailure
+                prop "inputFailure" processChunksInputFailure
 
             -- based on processChunks
-            prop "processBytes' tr = map toUpper" processBytes'1
-            prop
-                "error stream of processBytes' tr = map toUpper"
-                processBytes'2
-            prop "processBytes' on failing executable" processBytes'3
-            prop "processBytes' using error stream" processBytes'4
+            describe "processBytes'" $ do
+                prop "processBytes' tr = map toUpper" processBytes'1
+                prop
+                    "error stream of processBytes' tr = map toUpper"
+                    processBytes'2
+                prop "processBytes' on failing executable" processBytes'3
+                prop "processBytes' using error stream" processBytes'4
 
-            prop "processBytes tr = map toUpper" processBytes1
-            prop "processBytes on failing executable" processBytes2
-            prop "processBytes using error stream" processBytes3
+            describe "processBytes" $ do
+                prop "processBytes tr = map toUpper" processBytes1
+                prop "processBytes on failing executable" processBytes2
+                prop "processBytes using error stream" processBytes3
 
             -- Based on processBytes/Chunks
-            prop "toChunks' cat = FH.toChunks" toChunks1
-            prop "toChunks' on failing executable" toChunks2
+            describe "toChunks'" $ do
+                prop "toChunks' cat = FH.toChunks" toChunks1
+                prop "toChunks' on failing executable" toChunks2
 
-            prop "toBytes' cat = FH.toBytes" toBytes1
-            prop "toBytes' on failing executable" toBytes2
+            describe "toBytes'" $ do
+                prop "toBytes' cat = FH.toBytes" toBytes1
+                prop "toBytes' on failing executable" toBytes2
 
     removeExecutables
