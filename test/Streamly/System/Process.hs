@@ -469,25 +469,9 @@ main :: IO ()
 main = do
     createExecutables
     hspec $ do
-        describe "test for process functions" $ do
-            prop "toBytes' cat = FH.toBytes" toBytes1
-            prop "toBytes' on failing executable" toBytes2
-            prop "toChunks' cat = FH.toChunks" toChunks1
-            prop "toChunks' on failing executable" toChunks2
-            prop "processBytes tr = map toUpper" processBytes1
-            prop "processBytes on failing executable" processBytes2
-            prop "processBytes using error stream" processBytes3
-            prop
-                "AS.concat $ processChunks tr = map toUpper"
-                processChunks1
-            prop "processChunks on failing executable" processChunks2
-            prop "processChunks using error stream" processChunks3
-            prop "processBytes' tr = map toUpper" processBytes'1
-            prop
-                "error stream of processBytes' tr = map toUpper"
-                processBytes'2
-            prop "processBytes' on failing executable" processBytes'3
-            prop "processBytes' using error stream" processBytes'4
+        describe "Streamly.System.Process" $ do
+            -- Keep the tests in dependency order so that we test the basic
+            -- things first.
             prop
                 "AS.concat $ processChunks' tr = map toUpper"
                 processChunks'1
@@ -496,4 +480,30 @@ main = do
                 processChunks'2
             prop "processChunks' on failing executable" processChunks'3
             prop "processChunks' using error stream" processChunks'4
+
+            prop
+                "AS.concat $ processChunks tr = map toUpper"
+                processChunks1
+            prop "processChunks on failing executable" processChunks2
+            prop "processChunks using error stream" processChunks3
+
+            -- based on processChunks
+            prop "processBytes' tr = map toUpper" processBytes'1
+            prop
+                "error stream of processBytes' tr = map toUpper"
+                processBytes'2
+            prop "processBytes' on failing executable" processBytes'3
+            prop "processBytes' using error stream" processBytes'4
+
+            prop "processBytes tr = map toUpper" processBytes1
+            prop "processBytes on failing executable" processBytes2
+            prop "processBytes using error stream" processBytes3
+
+            -- Based on processBytes/Chunks
+            prop "toChunks' cat = FH.toChunks" toChunks1
+            prop "toChunks' on failing executable" toChunks2
+
+            prop "toBytes' cat = FH.toBytes" toBytes1
+            prop "toBytes' on failing executable" toBytes2
+
     removeExecutables
