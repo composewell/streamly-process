@@ -20,12 +20,14 @@
 --
 --     * Current working directory
 --     * Environment
+--     * Open file descriptors
 --     * Process group
 --     * Process uid and gid
 --     * Signal handlers
 --     * Terminal (Session)
 --
--- * All fds except stdin, stdout and stderr are closed in the child
+-- See the documentation of specific functions for the behavior of @stdin@,
+-- @stdout@ and @stderr@ file descriptors.
 --
 -- = Shell Programming
 --

@@ -158,7 +158,7 @@ procAttrs path args = CreateProcess
     , std_in = CreatePipe
     , std_out = CreatePipe
     , std_err = Inherit
-    , close_fds = True  -- False?
+    , close_fds = False
 
     -- Session/group/setuid/setgid
     , create_group = False
