@@ -15,14 +15,15 @@ import System.IO
     )
 import System.Process (proc, createProcess, waitForProcess, callCommand)
 
-import qualified Streamly.Prelude as S
-import qualified Streamly.System.Process as Proc
 import qualified Streamly.Data.Fold as FL
 import qualified Streamly.FileSystem.Handle as FH
+import qualified Streamly.Prelude as S
+import qualified Streamly.System.Process as Proc
 
 -- Internal imports
 import qualified Streamly.Internal.FileSystem.Handle
     as FH (toBytes, toChunks, putBytes, putChunks)
+import qualified Streamly.Internal.System.Process as Proc
 
 -- XXX replace with streamly versions once they are fixed
 {-# INLINE rights #-}
