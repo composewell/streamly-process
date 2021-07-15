@@ -56,6 +56,7 @@ library
   hs-source-dirs: src
   exposed-modules:
     Streamly.System.Process
+    Streamly.Internal.System.Process
   ghc-options:
     -Wall
     -Wcompat

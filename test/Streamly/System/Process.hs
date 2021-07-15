@@ -31,6 +31,7 @@ import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as AS (arraysOf, concat)
 import qualified Streamly.Internal.Data.Stream.IsStream as S (nilM, lefts, rights)
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, toBytes)
+import qualified Streamly.Internal.System.Process as Proc
 
 newtype SimpleError = SimpleError String
     deriving Show
