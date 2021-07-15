@@ -6,20 +6,17 @@
 -- Stability   : experimental
 -- Portability : GHC
 --
--- This module provides functions to turn operating system processes into
--- stream source, sink or transformation functions. Thus OS processes can be
--- used like regular Haskell stream functions connecting them into a stream
--- pipeline consisting of Haskell functions or other OS processes.
+-- This module provides functions to run operating system processes as stream
+-- source, sink or transformation functions. Thus OS processes can be used like
+-- regular Haskell stream functions and all the streaming combinators in
+-- streamly can be used to combine them.
 --
--- Processes can be composed in a streaming pipeline just like a Posix shell
--- command pipeline except that we use @&@ instead of @|@. Also note that like
--- the @pipefail@ option in shells, exceptions are propagated if any of the
--- stages fail.
+-- = Process Attributes
 --
 -- The default attributes of the new process created by the APIs in this module
 -- are described below:
 --
--- * The following attributes are inherited from the parent:
+-- * The following attributes are inherited from the parent process:
 --
 --     * Current working directory
 --     * Environment
@@ -29,6 +26,14 @@
 --     * Terminal (Session)
 --
 -- * All fds except stdin, stdout and stderr are closed in the child
+--
+-- = Shell Programming
+--
+-- Streamly provides powerful ways to combine streams. Processes can be
+-- composed in a streaming pipeline just like a Posix shell command pipeline
+-- except that we use @&@ instead of @|@. Also note that like the @pipefail@
+-- option in shells, exceptions are propagated if any of the stages fail.
+--
 
 module Streamly.System.Process
     ( ProcessFailure (..)
