@@ -195,12 +195,17 @@ createProc' modCfg path args = do
         <- createProcess $ modCfg $ procAttrs path args
     return (stdinH, stdoutH, stderrH, procH)
 
-{-# INLINE runStdin #-}
-runStdin :: (MonadIO m, IsStream t) => t m (Array Word8) -> Handle -> t m a
-runStdin input stdinH =
+{-# INLINE putChunksClose #-}
+putChunksClose :: (MonadIO m, IsStream t) =>
+    Handle -> t m (Array Word8) -> t m a
+putChunksClose h input =
     Stream.before
-        (Handle.putChunks stdinH (adapt input) >> liftIO (hClose stdinH))
+        (Handle.putChunks h (adapt input) >> liftIO (hClose h))
         Stream.nil
+
+{-# INLINE toChunksClose #-}
+toChunksClose :: (IsStream t, MonadAsync m) => Handle -> t m (Array Word8)
+toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.toChunks h)
 
 {-# INLINE processChunksWith #-}
 processChunksWith ::
@@ -230,20 +235,10 @@ processChunks' path args input = processChunksWith run path args
 
     where
 
-    runStdout stdoutH =
-        Stream.after
-            (liftIO $ hClose stdoutH)
-            (Stream.map Right (Handle.toChunks stdoutH))
-
-    runStderr stderrH =
-        Stream.after
-            (liftIO $ hClose stderrH)
-            (Stream.map Left (Handle.toChunks stderrH))
-
     run (stdinH, stdoutH, stderrH, _) =
-        runStdin input stdinH
-            `parallel` runStderr stderrH
-            `parallel` runStdout stdoutH
+        putChunksClose stdinH input
+            `parallel` Stream.map Left (toChunksClose stderrH)
+            `parallel` Stream.map Right (toChunksClose stdoutH)
 
 -- | @processBytes' path args input@ runs the executable at @path@ using @args@
 -- as arguments and @input@ stream as its standard input.  The error stream of
@@ -299,13 +294,8 @@ processChunks path args input = processChunksWith run path args
 
     where
 
-    runStdout stdoutH =
-        Stream.after
-            (liftIO $ hClose stdoutH)
-            (Handle.toChunks stdoutH)
-
     run (stdinH, stdoutH, _, _) =
-        runStdin input stdinH `parallel` runStdout stdoutH
+        putChunksClose stdinH input `parallel` toChunksClose stdoutH
 
 -- |
 -- Runs a process specified by the path to executable, arguments
