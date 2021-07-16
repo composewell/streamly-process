@@ -7,16 +7,19 @@
 -- Portability : GHC
 --
 -- This module provides functions to run operating system processes as stream
--- source, sink or transformation functions. Thus OS processes can be used like
--- regular Haskell stream functions and all the streaming combinators in
--- streamly can be used to combine them.
+-- source, sink or transformation functions. Thus OS processes can be used in
+-- the same way as Haskell functions and all the streaming combinators in
+-- streamly can be used to combine them. This allows you to seamlessly
+-- integrate external programs into your Haskell program.
+--
+-- We recommend that you use Streamly threads instead of system processes where
+-- possible as they have a simpler programming model and processes have a
+-- larger performance overhead.
 --
 -- = Process Attributes
 --
--- The default attributes of the new process created by the APIs in this module
--- are described below:
---
--- * The following attributes are inherited from the parent process:
+-- As usual, in the new process the following attributes are inherited from the
+-- parent process:
 --
 --     * Current working directory
 --     * Environment
@@ -25,9 +28,6 @@
 --     * Process uid and gid
 --     * Signal handlers
 --     * Terminal (Session)
---
--- See the documentation of specific functions for the behavior of @stdin@,
--- @stdout@ and @stderr@ file descriptors.
 --
 -- = Shell Programming
 --
