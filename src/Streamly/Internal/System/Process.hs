@@ -9,6 +9,21 @@
 
 -- TODO:
 --
+-- Remove dependency on the "process" package. We do not need a lot of it or
+-- need to reimplement significantly.
+--
+-- Interactive processes:
+--
+-- To understand process groups and sessions, see the "General Terminal
+-- Interface" section in the [POSIX
+-- standard](https://pubs.opengroup.org/onlinepubs/9699919799/).
+--
+-- For running processes interactively we need to make a new process group for
+-- the new process and make it the foreground process group. When the process
+-- is done we can make the parent process group as the foreground process group
+-- again. We need to ensure that this works properly under exceptions. We can
+-- provide an "interact" function to do so.
+--
 -- - Need a way to specify additional parameters for process creation.
 -- Possibly use something like @processBytesWith spec@ etc.
 --
@@ -43,14 +58,18 @@ module Streamly.Internal.System.Process
     )
 where
 
-import Control.Exception (Exception, displayException)
+import Control.Concurrent (forkIO)
+import Control.Exception (Exception, displayException, catch, throwIO)
+import Control.Monad (void, unless)
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Word (Word8)
+import Foreign.C.Error (Errno(..), ePIPE)
 import Streamly.Data.Array.Foreign (Array)
 import Streamly.Prelude (MonadAsync, parallel, IsStream, adapt)
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
+import GHC.IO.Exception (IOException(..), IOErrorType(..))
 import System.Process
     ( ProcessHandle
     , CreateProcess(..)
@@ -58,6 +77,7 @@ import System.Process
     , createProcess
     , waitForProcess
     , CmdSpec(..)
+    , terminateProcess
     )
 
 import qualified Streamly.Data.Array.Foreign as Array
@@ -76,6 +96,8 @@ import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as ArrayStream (arraysOf)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (toChunks, putChunks)
+-- XXX To be exposed by streamly
+-- import qualified Streamly.Internal.Data.Stream.IsStream as Stream (bracket')
 
 -- $setup
 -- >>> :set -XFlexibleContexts
@@ -135,17 +157,53 @@ instance Exception ProcessFailure where
     displayException (ProcessFailure exitCode) =
         "Process failed with exit code: " ++ show exitCode
 
--- |
--- Takes a process handle and waits for the process to exit, and then
--- raises 'ProcessFailure' exception if process failed with some
--- exit code, else peforms no action
---
-wait :: MonadIO m => ProcessHandle -> m ()
-wait procHandle = liftIO $ do
+-- | On normal cleanup we do not need to close the pipe handles as they are
+-- already guaranteed to be closed (we can assert that) by the time we reach
+-- here. We should not kill the process, rather wait for it to terminate
+-- normally.
+cleanupNormal :: MonadIO m =>
+    (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> m ()
+cleanupNormal (_, _, _, procHandle) = liftIO $ do
     exitCode <- waitForProcess procHandle
     case exitCode of
         ExitSuccess -> return ()
-        ExitFailure exitCodeInt -> throwM $ ProcessFailure exitCodeInt
+        ExitFailure code -> throwM $ ProcessFailure code
+
+-- | On an exception or if the process is getting garbage collected we need to
+-- close the pipe handles, and send a SIGTERM to the process to clean it up.
+-- Since we are using SIGTERM to kill the process, it may block forever. We can
+-- possibly use a timer and send a SIGKILL after the timeout if the process is
+-- still hanging around.
+_cleanupException :: MonadIO m =>
+    (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> m ()
+_cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
+    -- Send a SIGTERM to the process
+    terminateProcess ph
+
+    -- Ideally we should be closing the handle without flushing the buffers so
+    -- that we cannot get a SIGPIPE. But there seems to be no way to do that as
+    -- of now so we just ignore the SIGPIPE.
+    hClose stdinH `catch` eatSIGPIPE
+    hClose stdoutH
+    whenJust hClose stderrMaybe
+
+    -- Non-blocking wait for the process to go away
+    void $ forkIO (void $ waitForProcess ph)
+
+    where
+
+    whenJust action mb = maybe (pure ()) action mb
+
+    isSIGPIPE e =
+        case e of
+            IOError
+                { ioe_type = ResourceVanished
+                , ioe_errno = Just ioe
+                } -> Errno ioe == ePIPE
+            _ -> False
+
+    eatSIGPIPE e = unless (isSIGPIPE e) $ throwIO e
+_cleanupException _ = error "cleanupProcess: Not reachable"
 
 -- Set everything explicitly so that we are immune to changes upstream.
 procAttrs :: FilePath -> [String] -> CreateProcess
@@ -188,12 +246,9 @@ createProc' ::
        (CreateProcess -> CreateProcess) -- ^ Process attribute modifier
     -> FilePath                         -- ^ Executable path
     -> [String]                         -- ^ Arguments
-    -> IO (Handle, Handle, Handle, ProcessHandle)
+    -> IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
-createProc' modCfg path args = do
-    (Just stdinH, Just stdoutH, Just stderrH, procH)
-        <- createProcess $ modCfg $ procAttrs path args
-    return (stdinH, stdoutH, stderrH, procH)
+createProc' modCfg path args = createProcess $ modCfg $ procAttrs path args
 
 {-# INLINE putChunksClose #-}
 putChunksClose :: (MonadIO m, IsStream t) =>
@@ -210,19 +265,19 @@ toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.toChunks h)
 {-# INLINE processChunksWith #-}
 processChunksWith ::
     (IsStream t, MonadCatch m, MonadAsync m)
-    => ((Handle, Handle, Handle, ProcessHandle) -> t m a)
+    => (CreateProcess -> CreateProcess)
+    -> ((Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> t m a)
     -> FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> t m a     -- ^ Output stream
-processChunksWith run path args = Stream.bracket alloc cleanup run
+processChunksWith modCfg run path args =
+    -- Stream.bracket'
+    --      alloc cleanupNormal _cleanupException _cleanupException run
+    Stream.bracket alloc cleanupNormal run
 
     where
 
-    alloc = liftIO $ createProc' pipeStdErr path args
-
-    cleanup (stdinH, stdoutH, stderrH, procH) = do
-        liftIO $ hClose stdinH >> hClose stdoutH >> hClose stderrH
-        wait procH
+    alloc = liftIO $ createProc' modCfg path args
 
 {-# INLINE processChunks' #-}
 processChunks' ::
@@ -231,14 +286,15 @@ processChunks' ::
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
-processChunks' path args input = processChunksWith run path args
+processChunks' path args input = processChunksWith pipeStdErr run path args
 
     where
 
-    run (stdinH, stdoutH, stderrH, _) =
+    run (Just stdinH, Just stdoutH, Just stderrH, _) =
         putChunksClose stdinH input
             `parallel` Stream.map Left (toChunksClose stderrH)
             `parallel` Stream.map Right (toChunksClose stdoutH)
+    run _ = error "processChunks': Not reachable"
 
 -- | @processBytes' path args input@ runs the executable at @path@ using @args@
 -- as arguments and @input@ stream as its standard input.  The error stream of
@@ -272,15 +328,26 @@ processBytes' path args input =
         output = processChunks' path args input1
      in unfoldManyEither Array.read output
 
--- |
--- Runs a process specified by the path to executable, arguments
--- that are to be passed and input to be provided to the process
--- (standard input) in the form of a stream of array of Word8
--- and returns the output of the process (standard output) in
--- the form of a stream of array of Word8
+-- | @processChunks path args input@ runs the executable at @path@ using @args@
+-- as arguments and @input@ stream as its standard input.  Returns the standard
+-- output of the executable as a stream.
 --
--- Raises an exception 'ProcessFailure' If process failed due to some
--- reason
+-- If the input stream throws an exception or if the output stream is garbage
+-- collected before it could finish then the process is sent a SIGTERM and we
+-- wait for it to terminate gracefully.
+--
+-- If the process returns a non-zero exit code then a 'ProcessFailure'
+-- exception is raised.
+--
+-- The following code is equivalent to the shell command @echo "hello world" |
+-- tr [a-z] [A-Z]@:
+--
+-- >>> :{
+--    Process.toChunks "/bin/echo" ["hello world"]
+--  & Process.processChunks "/bin/tr" ["[a-z]", "[A-Z]"]
+--  & Stream.fold Stdio.write
+--  :}
+--HELLO WORLD
 --
 -- @since 0.1.0
 {-# INLINE processChunks #-}
@@ -290,20 +357,16 @@ processChunks ::
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Array Word8)    -- ^ Output stream
-processChunks path args input = processChunksWith run path args
+processChunks path args input = processChunksWith id run path args
 
     where
 
-    run (stdinH, stdoutH, _, _) =
+    run (Just stdinH, Just stdoutH, _, _) =
         putChunksClose stdinH input `parallel` toChunksClose stdoutH
+    run _ = error "processChunks: Not reachable"
 
--- |
--- Runs a process specified by the path to executable, arguments
--- that are to be passed and input to be provided to the process
--- (standard input) and returns the output of the process (standard output).
---
--- Raises an exception 'ProcessFailure' if process failed due to some
--- reason
+-- | Like 'processChunks' except that it works on a stream of bytes instead of
+-- a stream of chunks.
 --
 -- @since 0.1.0
 {-# INLINE processBytes #-}

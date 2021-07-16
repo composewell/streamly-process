@@ -486,6 +486,9 @@ main = do
     createExecutables
     hspec $ do
         describe "Streamly.System.Process" $ do
+            -- XXX Add a test for garbage collection case. Also check whether
+            -- the process is really gone after exception or gc.
+            --
             -- Keep the tests in dependency order so that we test the basic
             -- things first.
             describe "processChunks'" $ do
