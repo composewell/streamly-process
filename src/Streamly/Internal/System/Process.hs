@@ -45,7 +45,6 @@ module Streamly.Internal.System.Process
     (
     -- * Process Configuration
       Config
-    , mkConfig
 
     -- * Exceptions
     , ProcessFailure (..)
@@ -59,7 +58,9 @@ module Streamly.Internal.System.Process
     -- * Transformation
     , processBytes
     , processBytes'
+    , processChunksWith
     , processChunks
+    , processChunks'With
     , processChunks'
     )
 where
@@ -156,12 +157,9 @@ unfoldManyEither u m = fromStreamD $ unfoldManyEitherD u (toStreamD m)
 -------------------------------------------------------------------------------
 
 -- | Process configuration used for creating a new process.
-newtype Config = Config CreateProcess
-
--- | Create a default process configuration from an executable file path and
--- an argument list.
 --
--- By default the following attributes are inherited from the parent process:
+-- By default the process config is setup to inherit the following attributes
+-- from the parent process:
 --
 -- * Current working directory
 -- * Environment
@@ -170,6 +168,11 @@ newtype Config = Config CreateProcess
 -- * Process uid and gid
 -- * Signal handlers
 -- * Terminal (Session)
+--
+newtype Config = Config CreateProcess
+
+-- | Create a default process configuration from an executable file path and
+-- an argument list.
 --
 mkConfig :: FilePath -> [String] -> Config
 mkConfig path args = Config $ CreateProcess
@@ -286,7 +289,9 @@ createProc' ::
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
 createProc' modCfg path args = createProcess cfg
 
-    where Config cfg = modCfg $ mkConfig path args
+    where
+
+    Config cfg = modCfg $ mkConfig path args
 
 {-# INLINE putChunksClose #-}
 putChunksClose :: (MonadIO m, IsStream t) =>
@@ -300,15 +305,15 @@ putChunksClose h input =
 toChunksClose :: (IsStream t, MonadAsync m) => Handle -> t m (Array Word8)
 toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.toChunks h)
 
-{-# INLINE processChunksWith #-}
-processChunksWith ::
+{-# INLINE processChunksWithAction #-}
+processChunksWithAction ::
     (IsStream t, MonadCatch m, MonadAsync m)
-    => (Config -> Config)
-    -> ((Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> t m a)
+    => ((Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> t m a)
+    -> (Config -> Config)
     -> FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> t m a     -- ^ Output stream
-processChunksWith modCfg run path args =
+processChunksWithAction run modCfg path args =
     -- Stream.bracket'
     --      alloc cleanupNormal _cleanupException _cleanupException run
     Stream.bracket alloc cleanupNormal run
@@ -317,14 +322,16 @@ processChunksWith modCfg run path args =
 
     alloc = liftIO $ createProc' modCfg path args
 
-{-# INLINE processChunks' #-}
-processChunks' ::
+{-# INLINE processChunks'With #-}
+processChunks'With ::
     (IsStream t, MonadCatch m, MonadAsync m)
-    => FilePath             -- ^ Path to Executable
+    => (Config -> Config)   -- ^ Config modifier
+    -> FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
-processChunks' path args input = processChunksWith pipeStdErr run path args
+processChunks'With modifier path args input =
+    processChunksWithAction run (modifier . pipeStdErr) path args
 
     where
 
@@ -333,6 +340,15 @@ processChunks' path args input = processChunksWith pipeStdErr run path args
             `parallel` Stream.map Left (toChunksClose stderrH)
             `parallel` Stream.map Right (toChunksClose stdoutH)
     run _ = error "processChunks': Not reachable"
+
+{-# INLINE processChunks' #-}
+processChunks' ::
+    (IsStream t, MonadCatch m, MonadAsync m)
+    => FilePath             -- ^ Path to Executable
+    -> [String]             -- ^ Arguments
+    -> t m (Array Word8)    -- ^ Input stream
+    -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
+processChunks' = processChunks'With id
 
 -- | @processBytes' path args input@ runs the executable at @path@ using @args@
 -- as arguments and @input@ stream as its standard input.  The error stream of
@@ -366,6 +382,23 @@ processBytes' path args input =
         output = processChunks' path args input1
      in unfoldManyEither Array.read output
 
+{-# INLINE processChunksWith #-}
+processChunksWith ::
+    (IsStream t, MonadCatch m, MonadAsync m)
+    => (Config -> Config)   -- ^ Config modifier
+    -> FilePath             -- ^ Path to Executable
+    -> [String]             -- ^ Arguments
+    -> t m (Array Word8)    -- ^ Input stream
+    -> t m (Array Word8)    -- ^ Output stream
+processChunksWith modifier path args input =
+    processChunksWithAction run modifier path args
+
+    where
+
+    run (Just stdinH, Just stdoutH, _, _) =
+        putChunksClose stdinH input `parallel` toChunksClose stdoutH
+    run _ = error "processChunks: Not reachable"
+
 -- | @processChunks path args input@ runs the executable at @path@ using @args@
 -- as arguments and @input@ stream as its standard input.  Returns the standard
 -- output of the executable as a stream.
@@ -395,13 +428,7 @@ processChunks ::
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Array Word8)    -- ^ Output stream
-processChunks path args input = processChunksWith id run path args
-
-    where
-
-    run (Just stdinH, Just stdoutH, _, _) =
-        putChunksClose stdinH input `parallel` toChunksClose stdoutH
-    run _ = error "processChunks: Not reachable"
+processChunks = processChunksWith id
 
 -- | Like 'processChunks' except that it works on a stream of bytes instead of
 -- a stream of chunks.
