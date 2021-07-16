@@ -145,6 +145,9 @@ unfoldManyEither ::(IsStream t, Monad m) =>
     Unfold m a b -> t m (Either a a) -> t m (Either b b)
 unfoldManyEither u m = fromStreamD $ unfoldManyEitherD u (toStreamD m)
 
+-- TODO Add the path of the executable and the PID of the process to the
+-- exception info to aid debugging.
+
 -- | Represents the failure exit code of a process.
 --
 -- @since 0.1.0
