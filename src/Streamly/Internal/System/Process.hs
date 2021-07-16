@@ -42,7 +42,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Streamly.Internal.System.Process
-    ( ProcessFailure (..)
+    (
+    -- * Process Configuration
+      Config
+    , mkConfig
+
+    -- * Exceptions
+    , ProcessFailure (..)
 
     -- * Generation
     , toBytes
@@ -145,6 +151,63 @@ unfoldManyEither ::(IsStream t, Monad m) =>
     Unfold m a b -> t m (Either a a) -> t m (Either b b)
 unfoldManyEither u m = fromStreamD $ unfoldManyEitherD u (toStreamD m)
 
+-------------------------------------------------------------------------------
+-- Config
+-------------------------------------------------------------------------------
+
+-- | Process configuration used for creating a new process.
+newtype Config = Config CreateProcess
+
+-- | Create a default process configuration from an executable file path and
+-- an argument list.
+--
+-- By default the following attributes are inherited from the parent process:
+--
+-- * Current working directory
+-- * Environment
+-- * Open file descriptors
+-- * Process group
+-- * Process uid and gid
+-- * Signal handlers
+-- * Terminal (Session)
+--
+mkConfig :: FilePath -> [String] -> Config
+mkConfig path args = Config $ CreateProcess
+    { cmdspec = RawCommand path args
+    , cwd = Nothing -- inherit
+    , env = Nothing -- inherit
+
+    -- File descriptors
+    , std_in = CreatePipe
+    , std_out = CreatePipe
+    , std_err = Inherit
+    , close_fds = False
+
+    -- Session/group/setuid/setgid
+    , create_group = False
+    , child_user = Nothing  -- Posix only
+    , child_group = Nothing  -- Posix only
+
+    -- Signals (Posix only) behavior
+    -- Reset SIGINT (Ctrl-C) and SIGQUIT (Ctrl-\) to default handlers.
+    , delegate_ctlc = False
+
+    -- Terminal behavior
+    , new_session = False  -- Posix only
+    , detach_console = False -- Windows only
+    , create_new_console = False -- Windows Only
+
+    -- Added by commit 6b8ffe2ec3d115df9ccc047599545ca55c393005
+    , use_process_jobs = True -- Windows only
+    }
+
+pipeStdErr :: Config -> Config
+pipeStdErr (Config cfg) = Config $ cfg { std_err = CreatePipe }
+
+-------------------------------------------------------------------------------
+-- Exceptions
+-------------------------------------------------------------------------------
+--
 -- TODO Add the path of the executable and the PID of the process to the
 -- exception info to aid debugging.
 
@@ -160,6 +223,10 @@ instance Exception ProcessFailure where
     displayException (ProcessFailure exitCode) =
         "Process failed with exit code: " ++ show exitCode
 
+-------------------------------------------------------------------------------
+-- Transformation
+-------------------------------------------------------------------------------
+--
 -- | On normal cleanup we do not need to close the pipe handles as they are
 -- already guaranteed to be closed (we can assert that) by the time we reach
 -- here. We should not kill the process, rather wait for it to terminate
@@ -208,50 +275,18 @@ _cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
     eatSIGPIPE e = unless (isSIGPIPE e) $ throwIO e
 _cleanupException _ = error "cleanupProcess: Not reachable"
 
--- Set everything explicitly so that we are immune to changes upstream.
-procAttrs :: FilePath -> [String] -> CreateProcess
-procAttrs path args = CreateProcess
-    { cmdspec = RawCommand path args
-    , cwd = Nothing -- inherit
-    , env = Nothing -- inherit
-
-    -- File descriptors
-    , std_in = CreatePipe
-    , std_out = CreatePipe
-    , std_err = Inherit
-    , close_fds = False
-
-    -- Session/group/setuid/setgid
-    , create_group = False
-    , child_user = Nothing  -- Posix only
-    , child_group = Nothing  -- Posix only
-
-    -- Signals (Posix only) behavior
-    -- Reset SIGINT (Ctrl-C) and SIGQUIT (Ctrl-\) to default handlers.
-    , delegate_ctlc = False
-
-    -- Terminal behavior
-    , new_session = False  -- Posix only
-    , detach_console = False -- Windows only
-    , create_new_console = False -- Windows Only
-
-    -- Added by commit 6b8ffe2ec3d115df9ccc047599545ca55c393005
-    , use_process_jobs = True -- Windows only
-    }
-
-pipeStdErr :: CreateProcess -> CreateProcess
-pipeStdErr cfg = cfg { std_err = CreatePipe }
-
 -- | Creates a system process from an executable path and arguments. For the
--- default attributes used to create the process see 'procAttrs'.
+-- default attributes used to create the process see 'mkConfig'.
 --
 createProc' ::
-       (CreateProcess -> CreateProcess) -- ^ Process attribute modifier
+       (Config -> Config) -- ^ Process attribute modifier
     -> FilePath                         -- ^ Executable path
     -> [String]                         -- ^ Arguments
     -> IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
-createProc' modCfg path args = createProcess $ modCfg $ procAttrs path args
+createProc' modCfg path args = createProcess cfg
+
+    where Config cfg = modCfg $ mkConfig path args
 
 {-# INLINE putChunksClose #-}
 putChunksClose :: (MonadIO m, IsStream t) =>
@@ -268,7 +303,7 @@ toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.toChunks h)
 {-# INLINE processChunksWith #-}
 processChunksWith ::
     (IsStream t, MonadCatch m, MonadAsync m)
-    => (CreateProcess -> CreateProcess)
+    => (Config -> Config)
     -> ((Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> t m a)
     -> FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
@@ -384,6 +419,10 @@ processBytes path args input = -- rights . processBytes' path args
         output = processChunks path args input1
      in Stream.unfoldMany Array.read output
 
+-------------------------------------------------------------------------------
+-- Generation
+-------------------------------------------------------------------------------
+--
 -- | @toBytes' path args@ runs the executable at @path@ using @args@ as
 -- arguments and returns a stream of 'Either' bytes. The 'Left' values are from
 -- @stderr@ and the 'Right' values are from @stdout@ of the executable.
