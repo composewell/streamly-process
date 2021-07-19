@@ -6,6 +6,8 @@
 -- Stability   : experimental
 -- Portability : GHC
 --
+-- Use OS processes as stream transformation functions.
+--
 -- This module provides functions to run operating system processes as stream
 -- source, sink or transformation functions. Thus OS processes can be used in
 -- the same way as Haskell functions and all the streaming combinators in

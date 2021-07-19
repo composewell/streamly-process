@@ -1,7 +1,7 @@
 cabal-version:       2.2
 name:                streamly-process
 version:             0.1.0
-synopsis:            Streaming interfaces for system processes
+synopsis:            Use OS processes as stream transformation functions
 description:
   Connect system processes with Haskell functions or with each other,
   like Unix pipes, using streams.
