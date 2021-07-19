@@ -7,6 +7,9 @@
 -- Portability : GHC
 --
 
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- TODO:
 --
 -- Remove dependency on the "process" package. We do not need a lot of it or
@@ -65,17 +68,25 @@ module Streamly.Internal.System.Process
     )
 where
 
-import Control.Concurrent (forkIO)
-import Control.Exception (Exception, displayException, catch, throwIO)
-import Control.Monad (void, unless)
+-- #define USE_NATIVE
+
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Word (Word8)
-import Foreign.C.Error (Errno(..), ePIPE)
 import Streamly.Data.Array.Foreign (Array)
 import Streamly.Prelude (MonadAsync, parallel, IsStream, adapt)
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
+
+#ifdef USE_NATIVE
+import Control.Exception (Exception(..), catch, throwIO, SomeException)
+import System.Posix.Process (ProcessStatus(..))
+import Streamly.Internal.System.Process.Posix
+#else
+import Control.Concurrent (forkIO)
+import Control.Exception (Exception(..), catch, throwIO)
+import Control.Monad (void, unless)
+import Foreign.C.Error (Errno(..), ePIPE)
 import GHC.IO.Exception (IOException(..), IOErrorType(..))
 import System.Process
     ( ProcessHandle
@@ -86,6 +97,7 @@ import System.Process
     , CmdSpec(..)
     , terminateProcess
     )
+#endif
 
 import qualified Streamly.Data.Array.Foreign as Array
 import qualified Streamly.Prelude as Stream
@@ -169,6 +181,21 @@ unfoldManyEither u m = fromStreamD $ unfoldManyEitherD u (toStreamD m)
 -- * Signal handlers
 -- * Terminal (Session)
 --
+#ifdef USE_NATIVE
+
+type ProcessHandle = Process
+
+-- XXX After the fork specify what code to run in parent and in child before
+-- exec. Also, use config to control whether to search the binary in the PATH
+-- or not.
+newtype Config = Config Bool
+
+mkConfig :: FilePath -> [String] -> Config
+mkConfig _ _ = Config False
+
+pipeStdErr :: Config -> Config
+pipeStdErr (Config _) = Config True
+#else
 newtype Config = Config CreateProcess
 
 -- | Create a default process configuration from an executable file path and
@@ -206,6 +233,7 @@ mkConfig path args = Config $ CreateProcess
 
 pipeStdErr :: Config -> Config
 pipeStdErr (Config cfg) = Config $ cfg { std_err = CreatePipe }
+#endif
 
 -------------------------------------------------------------------------------
 -- Exceptions
@@ -237,6 +265,18 @@ instance Exception ProcessFailure where
 cleanupNormal :: MonadIO m =>
     (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> m ()
 cleanupNormal (_, _, _, procHandle) = liftIO $ do
+#ifdef USE_NATIVE
+    -- liftIO $ putStrLn "cleanupNormal waiting"
+    status <- wait procHandle
+    -- liftIO $ putStrLn "cleanupNormal done"
+    case status of
+        Exited ExitSuccess -> return ()
+        Exited (ExitFailure code) -> throwM $ ProcessFailure code
+        Terminated signal _ ->
+            throwM $ ProcessFailure (negate $ fromIntegral signal)
+        Stopped signal ->
+            throwM $ ProcessFailure (negate $ fromIntegral signal)
+#else
     exitCode <- waitForProcess procHandle
     case exitCode of
         ExitSuccess -> return ()
@@ -277,6 +317,7 @@ _cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
 
     eatSIGPIPE e = unless (isSIGPIPE e) $ throwIO e
 _cleanupException _ = error "cleanupProcess: Not reachable"
+#endif
 
 -- | Creates a system process from an executable path and arguments. For the
 -- default attributes used to create the process see 'mkConfig'.
@@ -287,7 +328,20 @@ createProc' ::
     -> [String]                         -- ^ Arguments
     -> IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
-createProc' modCfg path args = createProcess cfg
+createProc' modCfg path args = do
+#ifdef USE_NATIVE
+    ((inp, out, err, _excParent, _excChild), parent, child, failure) <-
+        mkStdioPipes cfg
+    -- XXX Pass the exChild handle to the child process action
+    proc <- newProcess child path args Nothing
+              `catch` (\(e :: SomeException) -> failure >> throwIO e)
+    -- XXX Read the exception channel and reap the process if it failed before
+    -- exec.
+    parent
+    return (Just inp, Just out, err, proc)
+#else
+    createProcess cfg
+#endif
 
     where
 
