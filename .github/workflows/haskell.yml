@@ -1,4 +1,4 @@
-# packcheck-0.5.1
+# packcheck-0.6.0
 # You can use any of the options supported by packcheck as environment
 # variables here.  See https://github.com/composewell/packcheck for all
 # options and their explanation.
@@ -42,7 +42,7 @@ jobs:
 
       PACKCHECK_LOCAL_PATH: "./packcheck.sh"
       PACKCHECK_GITHUB_URL: "https://raw.githubusercontent.com/composewell/packcheck"
-      PACKCHECK_GITHUB_COMMIT: "37bbe8a79ad5136e654e48e03ec519060a5b11e6"
+      PACKCHECK_GITHUB_COMMIT: "v0.6.0"
 
       BUILD: ${{ matrix.build }}
       GHCVER: ${{ matrix.ghc_version }}
@@ -59,34 +59,38 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: 8.10.4+sdist # sdist with cabal.project
-            ghc_version: 8.10.4
-            build: cabal-v2
+          - name: 9.0.1
+            ghc_version: 9.0.1
+            build: cabal
             runner: ubuntu-latest
-          - name: 8.10.4+Werror
-            ghc_version: 8.10.4
-            build: cabal-v2
+          - name: 8.10.5+sdist # sdist with cabal.project
+            ghc_version: 8.10.5
+            build: cabal
+            runner: ubuntu-latest
+          - name: 8.10.5+Werror
+            ghc_version: 8.10.5
+            build: cabal
             cabal_project: cabal.project.Werror
             runner: ubuntu-latest
-          - name: 8.10.4+macOS
-            ghc_version: 8.10.4
-            build: cabal-v2
+          - name: 8.10.5+macOS
+            ghc_version: 8.10.5
+            build: cabal
             disable_sdist_build: "y"
             runner: macos-latest
           - name: 8.8.4
             ghc_version: 8.8.4
-            build: cabal-v2
+            build: cabal
             runner: ubuntu-latest
           - name: 8.6.5
             ghc_version: 8.6.5
-            build: cabal-v2
+            build: cabal
             runner: ubuntu-latest
           - name: 8.4.4
             ghc_version: 8.4.4
-            build: cabal-v2
+            build: cabal
             runner: ubuntu-latest
           - name: hlint
-            build: cabal-v2
+            build: cabal
             hlint_options: "lint"
             hlint_targets: "src test Benchmark"
             runner: ubuntu-latest

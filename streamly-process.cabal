@@ -15,6 +15,7 @@ maintainer:          streamly@composewell.com
 copyright:           Composewell Technologies
 category:            Streamly, Streaming, System
 stability:           Experimental
+tested-with: GHC==9.0.1, GHC==8.10.5, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4
 build-type:          Simple
 extra-source-files:
   CHANGELOG.md
@@ -109,7 +110,7 @@ benchmark Benchmark.System.Process
   if flag(use-gauge)
     build-depends:  gauge >= 0.2.4 && < 0.3
   else
-    build-depends:    tasty-bench >= 0.2.5 && < 0.3
+    build-depends:    tasty-bench >= 0.2.5 && < 0.4
     mixins: tasty-bench
       (Test.Tasty.Bench as Gauge
       , Test.Tasty.Bench as Gauge.Main

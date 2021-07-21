@@ -54,6 +54,12 @@ let haskellPackages =
                             doHaddock = false;
                           });
 
+                    tasty-bench =
+                      super.callHackageDirect
+                        { pkg = "tasty-bench";
+                          ver = "0.3";
+                          sha256 = "0na1q52zr8p1zz8hby4242yjr2zma3js4n91avl7ibsa2y51vrc4";
+                        } {};
                 };
         };
 
