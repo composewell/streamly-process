@@ -3,8 +3,9 @@ name:                streamly-process
 version:             0.1.0
 synopsis:            Use OS processes as stream transformation functions
 description:
-  Connect system processes with Haskell functions or with each other,
-  like Unix pipes, using streams.
+    Run operating system processes as stream source, sink or transformation
+    functions. Use them seamlessly in a streaming data pipeline in the same way
+    as any other Haskell functions.
 homepage:            https://streamly.composewell.com
 bug-reports:         https://github.com/composewell/streamly-process/issues
 license:             Apache-2.0

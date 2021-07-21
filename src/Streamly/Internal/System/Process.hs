@@ -120,11 +120,13 @@ import qualified Streamly.Internal.FileSystem.Handle
 
 -- $setup
 -- >>> :set -XFlexibleContexts
+-- >>> import Data.Char (toUpper)
 -- >>> import Data.Function ((&))
 -- >>> import qualified Streamly.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Fold as Fold
 -- >>> import qualified Streamly.Prelude as Stream
 -- >>> import qualified Streamly.System.Process as Process
+-- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.Data.Stream.IsStream as Stream
 
 -- XXX To be imported from streamly in future releases.
@@ -242,10 +244,10 @@ pipeStdErr (Config cfg) = Config $ cfg { std_err = CreatePipe }
 -- TODO Add the path of the executable and the PID of the process to the
 -- exception info to aid debugging.
 
--- | Represents the failure exit code of a process.
+-- | An exception that is raised when a process fails.
 --
 -- @since 0.1.0
-newtype ProcessFailure = ProcessFailure Int
+newtype ProcessFailure = ProcessFailure Int -- ^ The exit code of the process.
     deriving Show
 
 -- Exception instance of ProcessFailure
@@ -380,7 +382,7 @@ processChunksWithAction run modCfg path args =
 processChunks'With ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
-    -> FilePath             -- ^ Path to Executable
+    -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
@@ -398,7 +400,7 @@ processChunks'With modifier path args input =
 {-# INLINE processChunks' #-}
 processChunks' ::
     (IsStream t, MonadCatch m, MonadAsync m)
-    => FilePath             -- ^ Path to Executable
+    => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
@@ -415,9 +417,9 @@ processChunks' = processChunks'With id
 -- world" | tr [:lower:] [:upper:]@:
 --
 -- >>> :{
---    Process.processBytes' "/bin/echo" ["hello world"] Stream.nil
+--    processBytes' "echo" ["hello world"] Stream.nil
 --  & Stream.rights
---  & Process.processBytes' "/bin/tr" ["[:lower:]", "[:upper:]"]
+--  & processBytes' "tr" ["[:lower:]", "[:upper:]"]
 --  & Stream.rights
 --  & Stream.fold Stdio.write
 --  :}
@@ -427,7 +429,7 @@ processChunks' = processChunks'With id
 {-# INLINE processBytes' #-}
 processBytes' ::
     (IsStream t, MonadCatch m, MonadAsync m)
-    => FilePath         -- ^ Executable path
+    => FilePath         -- ^ Executable name or path
     -> [String]         -- ^ Arguments
     -> t m Word8        -- ^ Input Stream
     -> t m (Either Word8 Word8) -- ^ Output Stream
@@ -440,7 +442,7 @@ processBytes' path args input =
 processChunksWith ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
-    -> FilePath             -- ^ Path to Executable
+    -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Array Word8)    -- ^ Output stream
@@ -453,24 +455,28 @@ processChunksWith modifier path args input =
         putChunksClose stdinH input `parallel` toChunksClose stdoutH
     run _ = error "processChunks: Not reachable"
 
--- | @processChunks path args input@ runs the executable at @path@ using @args@
--- as arguments and @input@ stream as its standard input.  Returns the standard
--- output of the executable as a stream.
+-- | @processChunks file args input@ runs the executable @file@ specified by
+-- its name or path using @args@ as arguments and @input@ stream as its
+-- standard input.  Returns the standard output of the executable as a stream.
+--
+-- If only the name of an executable file is specified instead of its path then
+-- the file name is searched in the directories specified by the PATH
+-- environment variable.
 --
 -- If the input stream throws an exception or if the output stream is garbage
 -- collected before it could finish then the process is sent a SIGTERM and we
 -- wait for it to terminate gracefully.
 --
--- If the process returns a non-zero exit code then a 'ProcessFailure'
+-- If the process terminates with a non-zero exit code then a 'ProcessFailure'
 -- exception is raised.
 --
 -- The following code is equivalent to the shell command @echo "hello world" |
 -- tr [a-z] [A-Z]@:
 --
 -- >>> :{
---    Process.toChunks "/bin/echo" ["hello world"]
---  & Process.processChunks "/bin/tr" ["[a-z]", "[A-Z]"]
---  & Stream.fold Stdio.write
+--    Process.toChunks "echo" ["hello world"]
+--  & Process.processChunks "tr" ["[a-z]", "[A-Z]"]
+--  & Stream.fold Stdio.writeChunks
 --  :}
 --HELLO WORLD
 --
@@ -478,7 +484,7 @@ processChunksWith modifier path args input =
 {-# INLINE processChunks #-}
 processChunks ::
     (IsStream t, MonadCatch m, MonadAsync m)
-    => FilePath             -- ^ Path to Executable
+    => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Array Word8)    -- ^ Output stream
@@ -487,12 +493,23 @@ processChunks = processChunksWith id
 -- | Like 'processChunks' except that it works on a stream of bytes instead of
 -- a stream of chunks.
 --
+-- We can write the example in 'processChunks' as follows. Notice how
+-- seamlessly we can replace the @tr@ process with the Haskell @toUpper@
+-- function:
+--
+-- >>> :{
+--    Process.toBytes "echo" ["hello world"]
+--  & Unicode.decodeLatin1 & Stream.map toUpper & Unicode.encodeLatin1
+--  & Stream.fold Stdio.write
+--  :}
+--HELLO WORLD
+--
 -- @since 0.1.0
 {-# INLINE processBytes #-}
 processBytes ::
     (IsStream t, MonadCatch m, MonadAsync m)
-    => FilePath     -- ^ Path to executable
-    -> [String]     -- ^ Arguments to pass to executable
+    => FilePath     -- ^ Executable name or path
+    -> [String]     -- ^ Arguments
     -> t m Word8    -- ^ Input Stream
     -> t m Word8    -- ^ Output Stream
 processBytes path args input = -- rights . processBytes' path args
@@ -529,19 +546,28 @@ processBytes path args input = -- rights . processBytes' path args
 {-# INLINE toBytes' #-}
 toBytes' ::
     (IsStream t, MonadAsync m, MonadCatch m)
-    => FilePath     -- ^ Executable path
+    => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
     -> t m (Either Word8 Word8)    -- ^ Output Stream
 toBytes' path args = processBytes' path args Stream.nil
 
--- | Like 'toBytes' but ignores the @stderr@ stream.
+-- | See 'processBytes'. 'toBytes' is defined as:
 --
--- >>> toBytes path args = toBytes' path args & Stream.rights
+-- >>> toBytes path args = processBytes path args Stream.nil
 --
+-- The following code is equivalent to the shell command @echo "hello world"@:
+--
+-- >>> :{
+--    Process.toBytes "echo" ["hello world"]
+--  & Stream.fold Stdio.write
+--  :}
+--hello world
+--
+-- @since 0.1.0
 {-# INLINE toBytes #-}
 toBytes ::
     (IsStream t, MonadAsync m, MonadCatch m)
-    => FilePath     -- ^ Executable path
+    => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
     -> t m Word8    -- ^ Output Stream
 toBytes path args = processBytes path args Stream.nil
@@ -550,14 +576,14 @@ toBytes path args = processBytes path args Stream.nil
 -- of @Word8@.
 --
 -- >>> :{
---   Process.toChunks' "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
+--   toChunks' "bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
 -- & Stream.fold (Fold.partition Stdio.writeErrChunks Stdio.writeChunks)
 -- :}
 -- world
 -- hello
 -- ((),())
 --
--- >>> toChunks' path args = Process.processChunks' path args Stream.nil
+-- >>> toChunks' path args = processChunks' path args Stream.nil
 --
 -- Prefer 'toChunks' over 'toBytes' when performance matters.
 --
@@ -565,19 +591,28 @@ toBytes path args = processBytes path args Stream.nil
 {-# INLINE toChunks' #-}
 toChunks' ::
     (IsStream t, MonadAsync m, MonadCatch m)
-    => FilePath             -- ^ Executable path
+    => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Either (Array Word8) (Array Word8))    -- ^ Output Stream
 toChunks' path args = processChunks' path args Stream.nil
 
--- | Like 'toChunks' but ignores the @stderr@ stream.
+-- | See 'processChunks'. 'toChunks' is defined as:
 --
--- >>> toChunks path args = toChunks' path args & Stream.rights
+-- >>> toChunks path args = processChunks path args Stream.nil
 --
+-- The following code is equivalent to the shell command @echo "hello world"@:
+--
+-- >>> :{
+--    Process.toChunks "echo" ["hello world"]
+--  & Stream.fold Stdio.writeChunks
+--  :}
+--hello world
+--
+-- @since 0.1.0
 {-# INLINE toChunks #-}
 toChunks ::
     (IsStream t, MonadAsync m, MonadCatch m)
-    => FilePath             -- ^ Executable path
+    => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Output Stream
 toChunks path args = processChunks path args Stream.nil

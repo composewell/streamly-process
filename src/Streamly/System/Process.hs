@@ -18,38 +18,122 @@
 -- possible as they have a simpler programming model and processes have a
 -- larger performance overhead.
 --
--- = Process Attributes
+-- = Imports for examples
 --
--- As usual, in the new process the following attributes are inherited from the
--- parent process:
+-- Use the following imports for examples below.
 --
---     * Current working directory
---     * Environment
---     * Open file descriptors
---     * Process group
---     * Process uid and gid
---     * Signal handlers
---     * Terminal (Session)
+-- >>> :set -XFlexibleContexts
+-- >>> :set -XScopedTypeVariables
+-- >>> import Data.Char (toUpper)
+-- >>> import Data.Function ((&))
+-- >>> import qualified Streamly.Console.Stdio as Stdio
+-- >>> import qualified Streamly.Data.Array.Foreign as Array
+-- >>> import qualified Streamly.Data.Fold as Fold
+-- >>> import qualified Streamly.Prelude as Stream
+-- >>> import qualified Streamly.System.Process as Process
+-- >>> import qualified Streamly.Unicode.Stream as Unicode
+-- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
+-- >>> import qualified Streamly.Internal.Data.Stream.IsStream as Stream
 --
--- = Shell Programming
+-- = Executables as functions
 --
 -- Streamly provides powerful ways to combine streams. Processes can be
 -- composed in a streaming pipeline just like a Posix shell command pipeline
--- except that we use @&@ instead of @|@. Also note that like the @pipefail@
--- option in shells, exceptions are propagated if any of the stages fail.
+-- except that we use @&@ instead of @|@. Moreover, we can mix processes and
+-- Haskell functions seamlessly in a processing pipeline. For example:
 --
+-- >>> :{
+--    Process.toBytes "echo" ["hello world"]
+--  & Process.processBytes "tr" ["[a-z]", "[A-Z]"]
+--  & Stream.fold Stdio.write
+--  :}
+--  HELLO WORLD
+--
+-- Of course, you can use a Haskell function instead of "tr":
+--
+-- >>> :{
+--    Process.toBytes "echo" ["hello world"]
+--  & Unicode.decodeLatin1 & Stream.map toUpper & Unicode.encodeLatin1
+--  & Stream.fold Stdio.write
+--  :}
+--  HELLO WORLD
+--
+-- = Shell commands as functions
+--
+-- Using a shell as the command interpreter we can use shell commands in a data
+-- processing pipeline:
+--
+-- >>> :{
+--    Process.toBytes "sh" ["-c", "echo hello | tr [a-z] [A-Z]"]
+--  & Stream.fold Stdio.write
+--  :}
+--  HELLO
+--
+-- = Concurrent Processing
+--
+-- We can run executables or commands concurrently as we would run any other
+-- functions in Streamly. For example, the following program greps the word
+-- "to" in all the files in the current directory concurrently:
+--
+-- >>> :{
+-- grep file =
+--    Process.toBytes "grep" ["-H", "to", file]
+--  & Stream.handle (\(_ :: Process.ProcessFailure) -> Stream.nil)
+--  & Stream.splitWithSuffix (== 10) Array.write
+--  :}
+--
+-- >>> :{
+-- pgrep =
+--    Dir.toFiles "."
+--  & Stream.concatMapWith Stream.async grep
+--  & Stream.fold Stdio.writeChunks
+-- :}
+--
+-- = Exception handling
+--
+-- Since we are composing using Streamly streaming pipeline there is nothing
+-- special about exception handling, it works the same as in Streamly.  Like
+-- the @pipefail@ option in shells, exceptions are propagated if any of the
+-- stages fail.
+--
+-- = Process Attributes
+--
+-- When a new process is spawned, the following attributes are inherited from
+-- the parent process:
+--
+-- * Current working directory
+-- * Environment
+-- * Open file descriptors
+-- * Process group
+-- * Process uid and gid
+-- * Signal handlers
+-- * Terminal (Session)
 
 module Streamly.System.Process
     ( ProcessFailure (..)
 
     -- * Generation
-    , toBytes
     , toChunks
+    , toBytes
 
     -- * Transformation
-    , processBytes
     , processChunks
+    , processBytes
     )
 where
 
 import Streamly.Internal.System.Process
+
+-- $setup
+-- >>> :set -XFlexibleContexts
+-- >>> :set -XScopedTypeVariables
+-- >>> import Data.Char (toUpper)
+-- >>> import Data.Function ((&))
+-- >>> import qualified Streamly.Console.Stdio as Stdio
+-- >>> import qualified Streamly.Data.Array.Foreign as Array
+-- >>> import qualified Streamly.Data.Fold as Fold
+-- >>> import qualified Streamly.Prelude as Stream
+-- >>> import qualified Streamly.System.Process as Process
+-- >>> import qualified Streamly.Unicode.Stream as Unicode
+-- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
+-- >>> import qualified Streamly.Internal.Data.Stream.IsStream as Stream
