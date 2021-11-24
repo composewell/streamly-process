@@ -58,51 +58,76 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        name:
+          # - 9.2.1
+          - 9.0.1
+          - 8.10.7+sdist # sdist with cabal.project
+          - 8.10.7+Werror
+          - 8.10.7+macOS
+          - 8.8.4
+          - 8.6.5
+          - 8.4.4
+          - hlint
         include:
+
           - name: 9.0.1
             ghc_version: 9.0.1
-            build: cabal
+            build: cabal-v2
             runner: ubuntu-latest
-          - name: 8.10.5+sdist # sdist with cabal.project
-            ghc_version: 8.10.5
-            build: cabal
+            cabal-version: 3.2
+
+          - name: 8.10.7+sdist # sdist with cabal.project
+            ghc_version: 8.10.7
+            build: cabal-v2
             runner: ubuntu-latest
-          - name: 8.10.5+Werror
-            ghc_version: 8.10.5
-            build: cabal
+            cabal-version: 3.2
+
+          - name: 8.10.7+Werror
+            ghc_version: 8.10.7
+            build: cabal-v2
             cabal_project: cabal.project.Werror
             runner: ubuntu-latest
-          - name: 8.10.5+macOS
-            ghc_version: 8.10.5
-            build: cabal
+            cabal-version: 3.2
+
+          - name: 8.10.7+macOS
+            ghc_version: 8.10.7
+            build: cabal-v2
             disable_sdist_build: "y"
             runner: macos-latest
+            cabal-version: 3.2
+
           - name: 8.8.4
             ghc_version: 8.8.4
-            build: cabal
+            build: cabal-v2
             runner: ubuntu-latest
+            cabal-version: 3.2
+
           - name: 8.6.5
             ghc_version: 8.6.5
-            build: cabal
+            build: cabal-v2
             runner: ubuntu-latest
+            cabal-version: 3.2
+
           - name: 8.4.4
             ghc_version: 8.4.4
-            build: cabal
+            build: cabal-v2
             runner: ubuntu-latest
+            cabal-version: 3.2
+
           - name: hlint
-            build: cabal
+            ghc_version: 8.10.7
+            build: cabal-v2
             hlint_options: "lint"
             hlint_targets: "src test Benchmark"
             runner: ubuntu-latest
+            cabal-version: 3.2
 
     steps:
     - uses: actions/checkout@v2
 
     - uses: haskell/actions/setup@v1
-      if: ${{ matrix.name != 'hlint' }}
       with:
         ghc-version: ${{ matrix.ghc_version }}
-        cabal-version: 3.2
 
     - uses: actions/cache@v1
       name: Restore cache ~/.cabal, ~/.stack, .stack-work, ~/.ghc, ~/.local
