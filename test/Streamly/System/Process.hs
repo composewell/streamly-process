@@ -13,7 +13,6 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Streamly.System.Process (ProcessFailure (..))
 import System.Directory (removeFile, findExecutable)
 import System.IO (IOMode(..), openFile, hClose)
-import System.Process (callCommand)
 import Test.Hspec (hspec, describe)
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
@@ -78,60 +77,26 @@ maxNumChar = 100 * 1024
 arrayChunkSize :: Int
 arrayChunkSize = 100
 
--- XXX Commit these files to repo
 executableFile :: FilePath
 #if mingw32_HOST_OS == 1
-executableFile = "./writeTrToError.bat"
+executableFile = "./test/data/writeTrToError.bat"
 #else
-executableFile = "./writeTrToError.sh"
-#endif
-
-executableFileContent :: String
-#if mingw32_HOST_OS == 1
-executableFileContent = "@echo off\r\ntr [a-z] [A-Z] >&2\r\n"
-#else
-executableFileContent =
-    "tr [a-z] [A-Z] >&2"
+executableFile = "./test/data/writeTrToError.sh"
 #endif
 
 executableFileFail :: FilePath
 #if mingw32_HOST_OS == 1
-executableFileFail = "./failExec.bat"
+executableFileFail = "./test/data/failExec.bat"
 #else
-executableFileFail = "./failExec.sh"
+executableFileFail = "./test/data/failExec.sh"
 #endif
-
-executableFileFailContent :: String
-executableFileFailContent =
-    "exit 1"
 
 executableFilePass :: FilePath
 #if mingw32_HOST_OS == 1
-executableFilePass = "./passExec.bat"
+executableFilePass = "./test/data/passExec.bat"
 #else
-executableFilePass = "./passExec.sh"
+executableFilePass = "./test/data/passExec.sh"
 #endif
-
-executableFilePassContent :: String
-executableFilePassContent =
-    "exit 0"
-
-createExecutable :: FilePath -> String -> IO ()
-createExecutable file content = do
-    writeFile file content
-    callCommand ("chmod +x " ++ file)
-
-createExecutables :: IO ()
-createExecutables = do
-    createExecutable executableFile executableFileContent
-    createExecutable executableFileFail executableFileFailContent
-    createExecutable executableFilePass executableFilePassContent
-
-removeExecutables :: IO ()
-removeExecutables = do
-    removeFile executableFile
-    removeFile executableFileFail
-    removeFile executableFilePass
 
 toUpper :: Word8 -> Word8
 toUpper char =
@@ -483,7 +448,6 @@ processChunks'4 = monadicIO $ run checkFailAction
 
 main :: IO ()
 main = do
-    createExecutables
     hspec $ do
         describe "Streamly.System.Process" $ do
             -- XXX Add a test for garbage collection case. Also check whether
@@ -529,5 +493,3 @@ main = do
             describe "toBytes'" $ do
                 prop "toBytes' cat = FH.toBytes" toBytes1
                 prop "toBytes' on failing executable" toBytes2
-
-    removeExecutables
