@@ -50,7 +50,8 @@ jobs:
       #CABAL_BUILD_OPTIONS: ${{ matrix.cabal_build_options }}
       CABAL_PROJECT: ${{ matrix.cabal_project }}
       #DISABLE_DOCS: ${{ matrix.disable_docs }}
-      DISABLE_SDIST_BUILD: ${{ matrix.disable_sdist_build }}
+      #DISABLE_SDIST_BUILD: ${{ matrix.disable_sdist_build }}
+      DISABLE_SDIST_BUILD: "y"
       HLINT_OPTIONS: ${{ matrix.hlint_options }}
       HLINT_TARGETS: ${{ matrix.hlint_targets }}
 
