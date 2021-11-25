@@ -6,3 +6,4 @@ appveyor.yml
 cabal.project.Werror
 default.nix
 stack.yaml
+cabal.project
