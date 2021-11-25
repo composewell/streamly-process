@@ -103,13 +103,12 @@ import qualified Streamly.Data.Array.Foreign as Array
 import qualified Streamly.Prelude as Stream
 
 -- Internal imports
--- XXX chunked IO chunk size should be moved to Streamly.System.IO
-import Streamly.Internal.Data.Array.Foreign.Type (defaultChunkSize)
 import Streamly.Internal.Data.Stream.StreamD.Step (Step (..))
-import Streamly.Internal.Data.Stream.StreamD.Type
-    (Stream (..), fromStreamD, toStreamD)
+import Streamly.Internal.Data.Stream.StreamD.Type (Stream(..))
+import Streamly.Internal.Data.Stream.IsStream.Type (fromStreamD, toStreamD)
 import Streamly.Internal.Data.SVar (adaptState)
 import Streamly.Internal.Data.Unfold.Type (Unfold(..))
+import Streamly.Internal.System.IO (defaultChunkSize)
 
 import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as ArrayStream (arraysOf)
