@@ -103,15 +103,11 @@ import qualified Streamly.Data.Array.Foreign as Array
 import qualified Streamly.Prelude as Stream
 
 -- Internal imports
-import Streamly.Internal.Data.Stream.StreamD.Step (Step (..))
-import Streamly.Internal.Data.Stream.StreamD.Type (Stream(..))
-import Streamly.Internal.Data.Stream.IsStream.Type (fromStreamD, toStreamD)
-import Streamly.Internal.Data.SVar (adaptState)
-import Streamly.Internal.Data.Unfold.Type (Unfold(..))
 import Streamly.Internal.System.IO (defaultChunkSize)
 
 import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as ArrayStream (arraysOf)
+import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (toChunks, putChunks)
 -- XXX To be exposed by streamly
@@ -127,43 +123,6 @@ import qualified Streamly.Internal.FileSystem.Handle
 -- >>> import qualified Streamly.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.Data.Stream.IsStream as Stream
-
--- XXX To be imported from streamly in future releases.
-
-data UnfoldManyEither o i f =
-      UnfoldManyEitherOuter o
-    | UnfoldManyEitherInner o i f
-
-{-# INLINE [1] unfoldManyEitherD #-}
-unfoldManyEitherD :: Monad m =>
-    Unfold m a b -> Stream m (Either a a) -> Stream m (Either b b)
-unfoldManyEitherD (Unfold istep inject) (Stream ostep ost) =
-    Stream step (UnfoldManyEitherOuter ost)
-  where
-    {-# INLINE [0] step #-}
-    step gst (UnfoldManyEitherOuter o) = do
-        r <- ostep (adaptState gst) o
-        case r of
-            Yield (Left a) o' -> do
-                i <- inject a
-                i `seq` return (Skip (UnfoldManyEitherInner o' i Left))
-            Yield (Right a) o' -> do
-                i <- inject a
-                i `seq` return (Skip (UnfoldManyEitherInner o' i Right))
-            Skip o' -> return $ Skip (UnfoldManyEitherOuter o')
-            Stop -> return Stop
-
-    step _ (UnfoldManyEitherInner o i f) = do
-        r <- istep i
-        return $ case r of
-            Yield x i' -> Yield (f x) (UnfoldManyEitherInner o i' f)
-            Skip i'    -> Skip (UnfoldManyEitherInner o i' f)
-            Stop       -> Skip (UnfoldManyEitherOuter o)
-
-{-# INLINE unfoldManyEither #-}
-unfoldManyEither ::(IsStream t, Monad m) =>
-    Unfold m a b -> t m (Either a a) -> t m (Either b b)
-unfoldManyEither u m = fromStreamD $ unfoldManyEitherD u (toStreamD m)
 
 -------------------------------------------------------------------------------
 -- Config
@@ -435,7 +394,7 @@ processBytes' ::
 processBytes' path args input =
     let input1 = ArrayStream.arraysOf defaultChunkSize input
         output = processChunks' path args input1
-     in unfoldManyEither Array.read output
+     in Stream.unfoldMany (Unfold.either Array.read) output
 
 {-# INLINE processChunksWith #-}
 processChunksWith ::
