@@ -107,11 +107,10 @@ import Streamly.Internal.System.IO (defaultChunkSize)
 
 import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as ArrayStream (arraysOf)
+import qualified Streamly.Internal.Data.Stream.IsStream as Stream (bracket')
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (toChunks, putChunks)
--- XXX To be exposed by streamly
--- import qualified Streamly.Internal.Data.Stream.IsStream as Stream (bracket')
 
 -- $setup
 -- >>> :set -XFlexibleContexts
@@ -247,9 +246,9 @@ cleanupNormal (_, _, _, procHandle) = liftIO $ do
 -- Since we are using SIGTERM to kill the process, it may block forever. We can
 -- possibly use a timer and send a SIGKILL after the timeout if the process is
 -- still hanging around.
-_cleanupException :: MonadIO m =>
+cleanupException :: MonadIO m =>
     (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> m ()
-_cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
+cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
     -- Send a SIGTERM to the process
     terminateProcess ph
 
@@ -276,7 +275,7 @@ _cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
             _ -> False
 
     eatSIGPIPE e = unless (isSIGPIPE e) $ throwIO e
-_cleanupException _ = error "cleanupProcess: Not reachable"
+cleanupException _ = error "cleanupProcess: Not reachable"
 #endif
 
 -- | Creates a system process from an executable path and arguments. For the
@@ -328,9 +327,8 @@ processChunksWithAction ::
     -> [String]             -- ^ Arguments
     -> t m a     -- ^ Output stream
 processChunksWithAction run modCfg path args =
-    -- Stream.bracket'
-    --      alloc cleanupNormal _cleanupException _cleanupException run
-    Stream.bracket alloc cleanupNormal run
+    Stream.bracket'
+          alloc cleanupNormal cleanupException cleanupException run
 
     where
 
