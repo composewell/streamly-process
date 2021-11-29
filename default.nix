@@ -38,29 +38,28 @@ let haskellPackages =
                 {
                     streamly-process = mkPackage super "streamly-process" ./. flags inShell;
 
-                    # TODO: Uncomment the following after the streamly release
+                    streamly =
+                      nixpkgs.haskell.lib.overrideCabal
+                        (super.callHackageDirect
+                          { pkg = "streamly";
+                            ver = "0.8.0";
+                            sha256 = "0vy2lkljizlhpbpbybmg9jcmj2g4s1aaqd2dzy5c0y0n4rgwxask";
+                          } {})
+                        (old:
+                          { librarySystemDepends =
+                              if builtins.currentSystem == "x86_64-darwin"
+                              then [nixpkgs.darwin.apple_sdk.frameworks.Cocoa]
+                              else [];
+                            enableLibraryProfiling = false;
+                            doHaddock = false;
+                          });
 
-                    # streamly =
-                    #   nixpkgs.haskell.lib.overrideCabal
-                    #     (super.callHackageDirect
-                    #       { pkg = "streamly";
-                    #         ver = "0.8.0";
-                    #         sha256 = "0vy2lkljizlhpbpbybmg9jcmj2g4s1aaqd2dzy5c0y0n4rgwxask";
-                    #       } {})
-                    #     (old:
-                    #       { librarySystemDepends =
-                    #           if builtins.currentSystem == "x86_64-darwin"
-                    #           then [nixpkgs.darwin.apple_sdk.frameworks.Cocoa]
-                    #           else [];
-                    #         enableLibraryProfiling = false;
-                    #         doHaddock = false;
-
-                    # unicode-data =
-                    #   super.callHackageDirect
-                    #     { pkg = "unicode-data";
-                    #       ver = "0.2.0";
-                    #       sha256 = "073wbhdxj1sh51907laihbzkkhabs8s71pqhag16lvmgbb7a3hla";
-                    #     } {};
+                    unicode-data =
+                      super.callHackageDirect
+                        { pkg = "unicode-data";
+                          ver = "0.2.0";
+                          sha256 = "14crb68g79yyw87fgh49z2fn4glqx0zr53v6mapihaxzkikhkkc3";
+                        } {};
 
                     tasty-bench =
                       super.callHackageDirect
@@ -73,9 +72,30 @@ let haskellPackages =
 
     drv = mkHaskellPackages true;
 
+    # A fake package to add some additional deps to the shell env
+    additionalDeps = drv.mkDerivation rec {
+              version = "0.1";
+              pname   = "streamly-process-additional";
+              license = "BSD-3-Clause";
+
+              setupHaskellDepends = with drv; [
+                cabal-doctest
+              ];
+              executableFrameworkDepends = with drv;
+                # XXX On macOS cabal2nix does not seem to generate a
+                # dependency on Cocoa framework.
+                if builtins.currentSystem == "x86_64-darwin"
+                then [nixpkgs.darwin.apple_sdk.frameworks.Cocoa]
+                else [];
+              executableHaskellDepends = with drv; [
+                unicode-data
+              ];
+            };
+
     shell = drv.shellFor {
         packages = p:
           [ p.streamly-process
+            additionalDeps
           ];
         doBenchmark = true;
         # Use a better prompt
