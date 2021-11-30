@@ -4,9 +4,7 @@ packages:
 
 extra-deps:
 - unicode-data-0.2.0
-# TODO Replace this with streamly-0.8.1 once streamly is released
-- git: https://github.com/composewell/streamly
-  commit: e76169324103e38972760541d1255ae5efe1295f
+- streamly-0.8.1
 
 # Look at https://stackoverflow.com/questions/70045586/could-not-find-module-system-console-mintty-win32-when-compiling-test-framework
 flags:
