@@ -37,13 +37,12 @@ let haskellPackages =
                 with nixpkgs.haskell.lib;
                 {
                     streamly-process = mkPackage super "streamly-process" ./. flags inShell;
-
                     streamly =
                       nixpkgs.haskell.lib.overrideCabal
                         (super.callHackageDirect
                           { pkg = "streamly";
-                            ver = "0.8.0";
-                            sha256 = "0vy2lkljizlhpbpbybmg9jcmj2g4s1aaqd2dzy5c0y0n4rgwxask";
+                            ver = "0.8.1";
+                            sha256 = "0ywyy7gxjnp32hx8kki0lfn94bnc9mzjh8g6mg65ff3vv28k2vdr";
                           } {})
                         (old:
                           { librarySystemDepends =
