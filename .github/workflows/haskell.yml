@@ -22,11 +22,7 @@ on:
 
 jobs:
   build:
-    name: >-
-      ${{ matrix.name }}
-      ${{ matrix.command }}
-      ${{ matrix.runner }}
-      ${{ matrix.ghc_version }}
+    name: ${{ matrix.name }}
     env:
       # ------------------------------------------------------------------------
       # Common options
@@ -60,7 +56,7 @@ jobs:
       fail-fast: false
       matrix:
         name:
-          # - 9.2.1
+          - 9.2.1
           - 9.0.1
           - 8.10.7+sdist # sdist with cabal.project
           - 8.10.7+Werror
@@ -70,6 +66,12 @@ jobs:
           - 8.4.4
           - hlint
         include:
+
+          - name: 9.2.1
+            ghc_version: 9.2.1
+            build: cabal-v2
+            runner: ubuntu-latest
+            cabal-version: 3.6
 
           - name: 9.0.1
             ghc_version: 9.0.1
