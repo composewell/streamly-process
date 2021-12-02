@@ -35,6 +35,8 @@ source-repository head
 
 flag fusion-plugin
   description: Use fusion plugin for benchmarks and executables
+  manual: True
+  default: False
 
 flag use-gauge
   description: Use gauge instead of tasty-bench for benchmarking
