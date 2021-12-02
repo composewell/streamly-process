@@ -15,7 +15,12 @@ maintainer:          streamly@composewell.com
 copyright:           Composewell Technologies
 category:            Streamly, Streaming, System
 stability:           Experimental
-tested-with: GHC==9.0.1, GHC==8.10.5, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4
+tested-with:         GHC==9.2.1
+                   , GHC==9.0.1
+                   , GHC==8.10.5
+                   , GHC==8.8.4
+                   , GHC==8.6.5
+                   , GHC==8.4.4
 build-type:          Simple
 extra-source-files:
   CHANGELOG.md
