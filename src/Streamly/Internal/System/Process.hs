@@ -240,6 +240,7 @@ cleanupNormal (_, _, _, procHandle) = liftIO $ do
     case exitCode of
         ExitSuccess -> return ()
         ExitFailure code -> throwM $ ProcessFailure code
+#endif
 
 -- | On an exception or if the process is getting garbage collected we need to
 -- close the pipe handles, and send a SIGTERM to the process to clean it up.
@@ -276,7 +277,6 @@ cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
 
     eatSIGPIPE e = unless (isSIGPIPE e) $ throwIO e
 cleanupException _ = error "cleanupProcess: Not reachable"
-#endif
 
 -- | Creates a system process from an executable path and arguments. For the
 -- default attributes used to create the process see 'mkConfig'.
