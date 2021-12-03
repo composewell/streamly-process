@@ -420,8 +420,7 @@ processChunksWith modifier path args input =
 -- environment variable.
 --
 -- If the input stream throws an exception or if the output stream is garbage
--- collected before it could finish then the process is sent a SIGTERM and we
--- wait for it to terminate gracefully.
+-- collected before it could finish then the process is terminated with SIGTERM.
 --
 -- If the process terminates with a non-zero exit code then a 'ProcessFailure'
 -- exception is raised.
