@@ -1,6 +1,6 @@
 cabal-version:       2.2
 name:                streamly-process
-version:             0.1.0
+version:             0.2.0
 synopsis:            Use OS processes as stream transformation functions
 description:
     Run operating system processes as stream source, sink or transformation
