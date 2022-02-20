@@ -77,6 +77,16 @@ maxNumChar = 100 * 1024
 arrayChunkSize :: Int
 arrayChunkSize = 100
 
+interpreterFile :: FilePath
+interpreterArg :: String
+#if mingw32_HOST_OS == 1
+interpreterFile = "cmd.exe"
+interpreterArg = "/c"
+#else
+interpreterFile = "/usr/bin/env"
+interpreterArg = "sh"
+#endif
+
 executableFile :: FilePath
 #if mingw32_HOST_OS == 1
 executableFile = "./test/data/writeTrToError.bat"
@@ -156,7 +166,8 @@ toBytes2 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.toBytes' executableFileFail []
+        S.drain $
+             Proc.toBytes' interpreterFile [interpreterArg, executableFileFail]
         return False
 
     failAction (ProcessFailure exitCode) =
@@ -189,7 +200,8 @@ toChunks2 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.toChunks' executableFileFail []
+        S.drain $
+             Proc.toChunks' interpreterFile [interpreterArg, executableFileFail]
         return False
 
     failAction (ProcessFailure exitCode) =
@@ -219,7 +231,9 @@ processBytes2 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.processBytes executableFileFail [] S.nil
+        S.drain $
+           Proc.processBytes
+               interpreterFile [interpreterArg, executableFileFail] S.nil
         return False
 
     failAction (ProcessFailure exitCode) =
@@ -234,8 +248,8 @@ processBytes3 = monadicIO $ run checkFailAction
     action = do
         S.drain $
             Proc.processBytes
-            executableFilePass
-            []
+            interpreterFile
+            [interpreterArg, executableFilePass]
             (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
@@ -293,7 +307,9 @@ processChunksProcessFailure = monadicIO $ run $ catch runProcess checkExitCode
     where
 
     runProcess = do
-        S.drain $ Proc.processChunks executableFileFail [] S.nil
+        S.drain $
+            Proc.processChunks
+                interpreterFile [interpreterArg, executableFileFail] S.nil
         return False
 
     checkExitCode (ProcessFailure exitCode) = return (exitCode == 1)
@@ -306,8 +322,8 @@ processChunksInputFailure = monadicIO $ run $ catch runProcess checkException
     runProcess = do
         S.drain $
             Proc.processChunks
-            executableFilePass
-            []
+            interpreterFile
+            [interpreterArg, executableFilePass]
             (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
@@ -338,8 +354,8 @@ processBytes'2 =
                 inputStream = S.fromList ls
                 outStream = S.lefts $
                     Proc.processBytes'
-                    executableFile
-                    ["[a-z]", "[A-Z]"]
+                    interpreterFile
+                    [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
                     inputStream
 
                 charUpperStrm = S.map toUpper inputStream
@@ -353,7 +369,9 @@ processBytes'3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.processBytes' executableFileFail [] S.nil
+        S.drain $
+            Proc.processBytes'
+                interpreterFile [interpreterArg, executableFileFail] S.nil
         return False
 
     failAction (ProcessFailure exitCode) =
@@ -368,8 +386,8 @@ processBytes'4 = monadicIO $ run checkFailAction
     action = do
         S.drain $
             Proc.processBytes'
-            executableFilePass
-            []
+            interpreterFile
+            [interpreterArg, executableFilePass]
             (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
@@ -406,8 +424,8 @@ processChunks'2 =
                 inputStream = S.fromList ls
                 outStream = AS.concat $ S.lefts $
                     Proc.processChunks'
-                    executableFile
-                    ["[a-z]", "[A-Z]"]
+                    interpreterFile
+                    [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
                     (AS.arraysOf arrayChunkSize inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
@@ -421,7 +439,8 @@ processChunks'3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.processChunks' executableFileFail [] S.nil
+        S.drain $ Proc.processChunks'
+            interpreterFile  [interpreterArg, executableFileFail] S.nil
         return False
 
     failAction (ProcessFailure exitCode) =
@@ -436,8 +455,8 @@ processChunks'4 = monadicIO $ run checkFailAction
     action = do
         S.drain $
             Proc.processChunks'
-            executableFilePass
-            []
+            interpreterFile
+            [interpreterArg, executableFilePass]
             (S.nilM $ throwM (SimpleError failErrorMessage))
         return False
 
