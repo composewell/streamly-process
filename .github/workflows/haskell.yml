@@ -72,18 +72,21 @@ jobs:
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.6
+            cabal_project: cabal.project.user
 
           - name: 9.0.1
             ghc_version: 9.0.1
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
+            cabal_project: cabal.project.user
 
           - name: 8.10.7+sdist # sdist with cabal.project
             ghc_version: 8.10.7
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
+            cabal_project: cabal.project.user
 
           - name: 8.10.7+Werror
             ghc_version: 8.10.7
@@ -97,24 +100,28 @@ jobs:
             build: cabal-v2
             runner: macos-latest
             cabal-version: 3.2
+            cabal_project: cabal.project.user
 
           - name: 8.8.4
             ghc_version: 8.8.4
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
+            cabal_project: cabal.project.user
 
           - name: 8.6.5
             ghc_version: 8.6.5
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
+            cabal_project: cabal.project.user
 
           - name: 8.4.4
             ghc_version: 8.4.4
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
+            cabal_project: cabal.project.user
 
           - name: hlint
             ghc_version: 8.10.7
@@ -123,6 +130,7 @@ jobs:
             hlint_targets: "src test Benchmark"
             runner: ubuntu-latest
             cabal-version: 3.2
+            cabal_project: cabal.project.user
 
     steps:
     - uses: actions/checkout@v2

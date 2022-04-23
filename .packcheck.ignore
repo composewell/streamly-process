@@ -7,3 +7,4 @@ cabal.project.Werror
 default.nix
 stack.yaml
 cabal.project
+cabal.project.user
