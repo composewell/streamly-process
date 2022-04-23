@@ -110,7 +110,7 @@ import qualified Streamly.Internal.Data.Array.Stream.Foreign
 import qualified Streamly.Internal.Data.Stream.IsStream as Stream (bracket')
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
-    as Handle (toChunks, putChunks)
+    as Handle (getChunks, putChunks)
 
 -- $setup
 -- >>> :set -XFlexibleContexts
@@ -316,7 +316,7 @@ putChunksClose h input =
 
 {-# INLINE toChunksClose #-}
 toChunksClose :: (IsStream t, MonadAsync m) => Handle -> t m (Array Word8)
-toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.toChunks h)
+toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.getChunks h)
 
 {-# INLINE processChunksWithAction #-}
 processChunksWithAction ::

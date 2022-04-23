@@ -32,7 +32,7 @@ import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as AS (arraysOf, concat)
 import qualified Streamly.Internal.Data.Stream.IsStream as S (nilM, lefts, rights)
-import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, toBytes)
+import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, getBytes)
 import qualified Streamly.Internal.System.Process as Proc
 
 newtype SimpleError = SimpleError String
@@ -151,7 +151,7 @@ toBytes1 =
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
-                    let strm = FH.toBytes handle
+                    let strm = FH.getBytes handle
                     return $ S.finally (hClose handle) strm
 
             run $ generateCharFile numBlock
@@ -185,7 +185,7 @@ toChunks1 =
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
-                    let strm = FH.toBytes handle
+                    let strm = FH.getBytes handle
                     return $ S.finally (hClose handle) strm
 
             run $ generateCharFile numBlock

@@ -22,7 +22,7 @@ import qualified Streamly.System.Process as Proc
 
 -- Internal imports
 import qualified Streamly.Internal.FileSystem.Handle
-    as FH (toBytes, toChunks, putBytes, putChunks)
+    as FH (getBytes, getChunks, putBytes, putChunks)
 import qualified Streamly.Internal.System.Process as Proc
 
 -- XXX replace with streamly versions once they are fixed
@@ -153,7 +153,7 @@ processBytes' trPath outputHdl = do
         $ Proc.processBytes'
             trPath
             ["[a-z]", "[A-Z]"]
-        $ FH.toBytes inputHdl
+        $ FH.getBytes inputHdl
     hClose inputHdl
 
 processBytes :: String-> Handle -> IO ()
@@ -163,7 +163,7 @@ processBytes trPath outputHdl = do
         $ Proc.processBytes
             trPath
             ["[a-z]", "[A-Z]"]
-        $ FH.toBytes inputHdl
+        $ FH.getBytes inputHdl
     hClose inputHdl
 
 processBytesToStderr :: Handle -> IO ()
@@ -174,7 +174,7 @@ processBytesToStderr outputHdl = do
         $ Proc.processBytes'
             trToStderr
             ["[a-z]", "[A-Z]"]
-        $ FH.toBytes inputHdl
+        $ FH.getBytes inputHdl
     hClose inputHdl
 
 processChunks :: String -> Handle -> IO ()
@@ -184,7 +184,7 @@ processChunks trPath outputHdl = do
         Proc.processChunks
             trPath
             ["[a-z]", "[A-Z]"]
-        $ FH.toChunks inputHdl
+        $ FH.getChunks inputHdl
     hClose inputHdl
 
 processChunks' :: String -> Handle -> IO ()
@@ -197,7 +197,7 @@ processChunks' trPath outputHdl = do
         $ Proc.processChunks'
             trPath
             ["[a-z]", "[A-Z]"]
-            (FH.toChunks inputHdl)
+            (FH.getChunks inputHdl)
     hClose inputHdl
 
 processChunksToStderr :: Handle -> IO ()
@@ -208,7 +208,7 @@ processChunksToStderr outputHdl = do
         $ Proc.processChunks'
             trToStderr
             ["[a-z]", "[A-Z]"]
-            (FH.toChunks inputHdl)
+            (FH.getChunks inputHdl)
     hClose inputHdl
 
 -------------------------------------------------------------------------------

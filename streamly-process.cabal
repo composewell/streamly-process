@@ -107,7 +107,7 @@ benchmark Benchmark.System.Process
     , directory         >= 1.2.2 && < 1.4
     , process           >= 1.0   && < 1.7
     -- Uses internal APIs
-    , streamly          == 0.8.1.* || == 0.8.2.*
+    , streamly          == 0.8.2.*
 
   if flag(fusion-plugin) && !impl(ghc < 8.6)
     build-depends:
@@ -138,4 +138,4 @@ test-suite Test.System.Process
     , process           >= 1.0   && < 1.7
     , QuickCheck        >= 2.10  && < 2.15
     -- Uses internal APIs
-    , streamly          == 0.8.1.* || == 0.8.2.*
+    , streamly          == 0.8.2.*
