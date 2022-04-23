@@ -76,15 +76,6 @@ library
   if !os(windows)
     exposed-modules:
       Streamly.Internal.System.Process.Posix
-  ghc-options:
-    -Wall
-    -Wcompat
-    -Wunrecognised-warning-flags
-    -Widentities
-    -Wincomplete-record-updates
-    -Wincomplete-uni-patterns
-    -Wredundant-constraints
-    -Wnoncanonical-monad-instances
   build-depends:
       base              >= 4.8   && < 5
     , process           >= 1.0   && < 1.7
