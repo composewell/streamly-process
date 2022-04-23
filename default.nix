@@ -5,7 +5,7 @@
 
 {
   nixpkgs ?
-    import (builtins.fetchTarball https://github.com/NixOS/nixpkgs/archive/refs/tags/21.05.tar.gz)
+    import (builtins.fetchTarball https://github.com/NixOS/nixpkgs/archive/refs/tags/21.11.tar.gz)
         {}
 , compiler ? "default"
 , c2nix ? "" # cabal2nix CLI options
@@ -37,13 +37,33 @@ let haskellPackages =
                 with nixpkgs.haskell.lib;
                 {
                     streamly-process = mkPackage super "streamly-process" ./. flags inShell;
+
                     streamly =
                       nixpkgs.haskell.lib.overrideCabal
-                        (super.callHackageDirect
-                          { pkg = "streamly";
-                            ver = "0.8.2";
-                            sha256 = "0jhsdd71kqw0k0aszg1qb1l0wbxl1r73hsmkdgch4vlx43snlc8a";
-                          } {})
+                        #(super.callHackageDirect
+                        #  { pkg = "streamly";
+                        #    ver = "0.8.2";
+                        #    sha256 = "sha256-CjFq9SCdbgLZa7NqOE4OtC8OaFg4vK8VmIDjGU5rGko=";
+                        #  } {})
+                        (let src = fetchGit {
+                            url = "git@github.com:composewell/streamly.git";
+                            rev = "a849812d9960d5b7868e770156ab774ee8f70157";
+                        }; in super.callCabal2nix "streamly" src {})
+                        (old:
+                          { librarySystemDepends =
+                              if builtins.currentSystem == "x86_64-darwin"
+                              then [nixpkgs.darwin.apple_sdk.frameworks.Cocoa]
+                              else [];
+                            enableLibraryProfiling = false;
+                            doHaddock = false;
+                          });
+
+                    streamly-core =
+                      nixpkgs.haskell.lib.overrideCabal
+                        (let src = fetchGit {
+                            url = "git@github.com:composewell/streamly.git";
+                            rev = "a849812d9960d5b7868e770156ab774ee8f70157";
+                        }; in super.callCabal2nix "streamly-core" "${src}/core" {})
                         (old:
                           { librarySystemDepends =
                               if builtins.currentSystem == "x86_64-darwin"
@@ -57,7 +77,7 @@ let haskellPackages =
                       super.callHackageDirect
                         { pkg = "unicode-data";
                           ver = "0.3.0";
-                          sha256 = "0izxxk7qgq22ammzmwc4cs4nlhzp7y55gzyas2a8bzhdpac1j7yx";
+                          sha256 = "sha256-3R8ZmLoN/oWU0Mr/V4o/90NqiWaE8fprVULgh8/s/Uc=";
                         } {};
 
                     tasty-bench =
