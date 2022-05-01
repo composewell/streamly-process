@@ -11,7 +11,8 @@ import Control.Monad (unless)
 import Control.Monad.Catch (throwM, catch)
 import Control.Monad.IO.Class (MonadIO(..))
 import Streamly.System.Process (ProcessFailure (..))
-import System.Directory (removeFile, findExecutable)
+import System.Directory (removeFile, findExecutable, doesFileExist)
+import System.Exit (exitSuccess)
 import System.IO (IOMode(..), openFile, hClose)
 import Test.Hspec (hspec, describe)
 import Test.Hspec.QuickCheck
@@ -469,6 +470,15 @@ processChunks'4 = monadicIO $ run checkFailAction
 
 main :: IO ()
 main = do
+    -- Nix does not have "/usr/bin/env", so the execution of test executables
+    -- fails. We can create the executables as temporary files to avoid this
+    -- issue. Even creating Haskell executables does not work because of
+    -- https://github.com/haskell/cabal/issues/7577 .
+    r <- doesFileExist "/usr/bin/env"
+    unless r $ do
+        putStrLn $ "/usr/bin/env does not exist, skipping tests."
+        exitSuccess
+
     hspec $ do
         describe "Streamly.System.Process" $ do
             -- XXX Add a test for garbage collection case. Also check whether
