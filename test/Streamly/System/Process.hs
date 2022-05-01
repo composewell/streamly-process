@@ -89,13 +89,7 @@ interpreterFile = "/usr/bin/env"
 interpreterArg = "sh"
 #endif
 
-executableFile :: FilePath
-#if mingw32_HOST_OS == 1
-executableFile = "./test/data/writeTrToError.bat"
-#else
-executableFile = "./test/data/writeTrToError.sh"
-#endif
-
+-- XXX Replace these with Haskell executables
 executableFileFail :: FilePath
 #if mingw32_HOST_OS == 1
 executableFileFail = "./test/data/failExec.bat"
@@ -211,16 +205,15 @@ toChunks2 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-pipeBytes1 :: Property
-pipeBytes1 =
+pipeBytes1 :: FilePath -> Property
+pipeBytes1 trBinary =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
                 genStrm = Proc.pipeBytes
                             trBinary
-                            ["[a-z]", "[A-Z]"]
+                            ["stdout"]
                             inputStream
                 charUpperStrm = S.map toUpper inputStream
 
@@ -261,18 +254,17 @@ pipeBytes3 = monadicIO $ run checkFailAction
     checkFailAction = catch action failAction
 
 -- Termination on input termination
-processChunksConsumeAllInput :: Property
-processChunksConsumeAllInput =
+processChunksConsumeAllInput :: FilePath -> Property
+processChunksConsumeAllInput trBinary =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
 
                 genStrm = AS.concat $
                     Proc.pipeChunks
                     trBinary
-                    ["[a-z]", "[A-Z]"]
+                    ["stdout"]
                     (AS.arraysOf arrayChunkSize inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
@@ -331,16 +323,15 @@ processChunksInputFailure = monadicIO $ run $ catch runProcess checkException
 
     checkException (SimpleError err) = return (err == failErrorMessage)
 
-processBytes'1 :: Property
-processBytes'1 =
+processBytes'1 :: FilePath -> Property
+processBytes'1 trBinary =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
                 genStrm = S.rights $ Proc.processBytes'
                             trBinary
-                            ["[a-z]", "[A-Z]"]
+                            ["stdout"]
                             inputStream
                 charUpperStrm = S.map toUpper inputStream
 
@@ -348,8 +339,8 @@ processBytes'1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-processBytes'2 :: Property
-processBytes'2 =
+processBytes'2 :: FilePath -> Property
+processBytes'2 trBinary =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             let
@@ -357,7 +348,7 @@ processBytes'2 =
                 outStream = S.lefts $
                     Proc.processBytes'
                     interpreterFile
-                    [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
+                    [trBinary, "stderr"]
                     inputStream
 
                 charUpperStrm = S.map toUpper inputStream
@@ -398,18 +389,17 @@ processBytes'4 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-processChunks'1 :: Property
-processChunks'1 =
+processChunks'1 :: FilePath -> Property
+processChunks'1 trBinary =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
-            trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
 
                 genStrm = AS.concat $ S.rights $
                     Proc.processChunks'
                     trBinary
-                    ["[a-z]", "[A-Z]"]
+                    ["stdout"]
                     (AS.arraysOf arrayChunkSize inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
@@ -418,8 +408,8 @@ processChunks'1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-processChunks'2 :: Property
-processChunks'2 =
+processChunks'2 :: FilePath -> Property
+processChunks'2 trBinary =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             let
@@ -427,7 +417,7 @@ processChunks'2 =
                 outStream = AS.concat $ S.lefts $
                     Proc.processChunks'
                     interpreterFile
-                    [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
+                    [trBinary, "stderr"]
                     (AS.arraysOf arrayChunkSize inputStream)
 
                 charUpperStrm = S.map toUpper inputStream
@@ -469,6 +459,7 @@ processChunks'4 = monadicIO $ run checkFailAction
 
 main :: IO ()
 main = do
+    trBinary <- which "Transliterate"
     hspec $ do
         describe "Streamly.System.Process" $ do
             -- XXX Add a test for garbage collection case. Also check whether
@@ -479,30 +470,30 @@ main = do
             describe "processChunks'" $ do
                 prop
                     "AS.concat $ processChunks' tr = map toUpper"
-                    processChunks'1
+                    (processChunks'1 trBinary)
                 prop
                     "error stream of processChunks' tr = map toUpper"
-                    processChunks'2
+                    (processChunks'2 trBinary)
                 prop "processChunks' on failing executable" processChunks'3
                 prop "processChunks' using error stream" processChunks'4
 
             describe "processChunks" $ do
-                prop "consumeAllInput" processChunksConsumeAllInput
+                prop "consumeAllInput" (processChunksConsumeAllInput trBinary)
                 prop "consumePartialInput" processChunksConsumePartialInput
                 prop "ProcessFailure" processChunksProcessFailure
                 prop "inputFailure" processChunksInputFailure
 
             -- based on processChunks
             describe "processBytes'" $ do
-                prop "processBytes' tr = map toUpper" processBytes'1
+                prop "processBytes' tr = map toUpper" (processBytes'1 trBinary)
                 prop
                     "error stream of processBytes' tr = map toUpper"
-                    processBytes'2
+                    (processBytes'2 trBinary)
                 prop "processBytes' on failing executable" processBytes'3
                 prop "processBytes' using error stream" processBytes'4
 
             describe "pipeBytes" $ do
-                prop "pipeBytes tr = map toUpper" pipeBytes1
+                prop "pipeBytes tr = map toUpper" (pipeBytes1 trBinary)
                 prop "pipeBytes on failing executable" pipeBytes2
                 prop "pipeBytes using error stream" pipeBytes3
 
