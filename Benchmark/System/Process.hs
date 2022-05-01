@@ -156,11 +156,11 @@ processBytes' trPath outputHdl = do
         $ FH.getBytes inputHdl
     hClose inputHdl
 
-processBytes :: String-> Handle -> IO ()
-processBytes trPath outputHdl = do
+pipeBytes :: String-> Handle -> IO ()
+pipeBytes trPath outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     FH.putBytes outputHdl
-        $ Proc.processBytes
+        $ Proc.pipeBytes
             trPath
             ["[a-z]", "[A-Z]"]
         $ FH.getBytes inputHdl
@@ -177,11 +177,11 @@ processBytesToStderr outputHdl = do
         $ FH.getBytes inputHdl
     hClose inputHdl
 
-processChunks :: String -> Handle -> IO ()
-processChunks trPath outputHdl = do
+pipeChunks :: String -> Handle -> IO ()
+pipeChunks trPath outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     FH.putChunks outputHdl $
-        Proc.processChunks
+        Proc.pipeChunks
             trPath
             ["[a-z]", "[A-Z]"]
         $ FH.getChunks inputHdl
@@ -227,10 +227,10 @@ main = do
     defaultMain
         [ bench "toBytes'" $ nfIO $ toBytes' catPath nullH
         , bench "toChunks'" $ nfIO $ toChunks' catPath nullH
-        , bench "processBytes tr" $ nfIO $ processBytes trPath nullH
+        , bench "pipeBytes tr" $ nfIO $ pipeBytes trPath nullH
         , bench "processBytes' tr" $ nfIO $ processBytes' trPath nullH
         , bench "processBytesToStderr tr" $ nfIO $ processBytesToStderr nullH
-        , bench "processChunks tr" $ nfIO (processChunks trPath nullH)
+        , bench "pipeChunks tr" $ nfIO (pipeChunks trPath nullH)
         , bench "processChunks' tr" $ nfIO (processChunks' trPath nullH)
         , bench "processChunksToStderr" $ nfIO $ processChunksToStderr nullH
         ] `finally` (do

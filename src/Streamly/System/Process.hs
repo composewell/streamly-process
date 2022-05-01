@@ -44,7 +44,7 @@
 --
 -- >>> :{
 --    Process.toBytes "echo" ["hello world"]
---  & Process.processBytes "tr" ["[a-z]", "[A-Z]"]
+--  & Process.pipeBytes "tr" ["[a-z]", "[A-Z]"]
 --  & Stream.fold Stdio.write
 --  :}
 --  HELLO WORLD
@@ -117,6 +117,10 @@ module Streamly.System.Process
     , toBytes
 
     -- * Transformation
+    , pipeChunks
+    , pipeBytes
+
+    -- * Deprecated
     , processChunks
     , processBytes
     )

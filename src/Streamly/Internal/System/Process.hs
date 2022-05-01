@@ -59,12 +59,16 @@ module Streamly.Internal.System.Process
     , toChunks'
 
     -- * Transformation
-    , processBytes
+    , pipeBytes
     , processBytes'
     , processChunksWith
-    , processChunks
+    , pipeChunks
     , processChunks'With
     , processChunks'
+
+    -- * Deprecated
+    , processBytes
+    , processChunks
     )
 where
 
@@ -411,7 +415,7 @@ processChunksWith modifier path args input =
         putChunksClose stdinH input `parallel` toChunksClose stdoutH
     run _ = error "processChunks: Not reachable"
 
--- | @processChunks file args input@ runs the executable @file@ specified by
+-- | @pipeChunks file args input@ runs the executable @file@ specified by
 -- its name or path using @args@ as arguments and @input@ stream as its
 -- standard input.  Returns the standard output of the executable as a stream.
 --
@@ -430,12 +434,22 @@ processChunksWith modifier path args input =
 --
 -- >>> :{
 --    Process.toChunks "echo" ["hello world"]
---  & Process.processChunks "tr" ["[a-z]", "[A-Z]"]
+--  & Process.pipeChunks "tr" ["[a-z]", "[A-Z]"]
 --  & Stream.fold Stdio.writeChunks
 --  :}
 --HELLO WORLD
 --
--- @since 0.1.0
+-- /pre-release/
+{-# INLINE pipeChunks #-}
+pipeChunks ::
+    (IsStream t, MonadCatch m, MonadAsync m)
+    => FilePath             -- ^ Executable name or path
+    -> [String]             -- ^ Arguments
+    -> t m (Array Word8)    -- ^ Input stream
+    -> t m (Array Word8)    -- ^ Output stream
+pipeChunks = processChunksWith id
+
+{-# DEPRECATED processChunks "Please use pipeChunks instead." #-}
 {-# INLINE processChunks #-}
 processChunks ::
     (IsStream t, MonadCatch m, MonadAsync m)
@@ -443,23 +457,36 @@ processChunks ::
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Array Word8)    -- ^ Output stream
-processChunks = processChunksWith id
+processChunks = pipeChunks
 
--- | Like 'processChunks' except that it works on a stream of bytes instead of
+-- | Like 'pipeChunks' except that it works on a stream of bytes instead of
 -- a stream of chunks.
 --
--- We can write the example in 'processChunks' as follows. Notice how
+-- We can write the example in 'pipeChunks' as follows. Notice how
 -- seamlessly we can replace the @tr@ process with the Haskell @toUpper@
 -- function:
 --
 -- >>> :{
 --    Process.toBytes "echo" ["hello world"]
---  & Unicode.decodeLatin1 & Stream.map toUpper & Unicode.encodeLatin1
+--  & Process.pipeBytes "tr" ["[a-z]", "[A-Z]"]
 --  & Stream.fold Stdio.write
 --  :}
 --HELLO WORLD
 --
--- @since 0.1.0
+-- /pre-release/
+{-# INLINE pipeBytes #-}
+pipeBytes ::
+    (IsStream t, MonadCatch m, MonadAsync m)
+    => FilePath     -- ^ Executable name or path
+    -> [String]     -- ^ Arguments
+    -> t m Word8    -- ^ Input Stream
+    -> t m Word8    -- ^ Output Stream
+pipeBytes path args input = -- rights . pipeBytes' path args
+    let input1 = ArrayStream.arraysOf defaultChunkSize input
+        output = pipeChunks path args input1
+     in Stream.unfoldMany Array.read output
+
+{-# DEPRECATED processBytes "Please use pipeBytes instead." #-}
 {-# INLINE processBytes #-}
 processBytes ::
     (IsStream t, MonadCatch m, MonadAsync m)
@@ -467,10 +494,7 @@ processBytes ::
     -> [String]     -- ^ Arguments
     -> t m Word8    -- ^ Input Stream
     -> t m Word8    -- ^ Output Stream
-processBytes path args input = -- rights . processBytes' path args
-    let input1 = ArrayStream.arraysOf defaultChunkSize input
-        output = processChunks path args input1
-     in Stream.unfoldMany Array.read output
+processBytes = pipeBytes
 
 -------------------------------------------------------------------------------
 -- Generation
@@ -551,9 +575,9 @@ toChunks' ::
     -> t m (Either (Array Word8) (Array Word8))    -- ^ Output Stream
 toChunks' path args = processChunks' path args Stream.nil
 
--- | See 'processChunks'. 'toChunks' is defined as:
+-- | See 'pipeChunks'. 'toChunks' is defined as:
 --
--- >>> toChunks path args = processChunks path args Stream.nil
+-- >>> toChunks path args = pipeChunks path args Stream.nil
 --
 -- The following code is equivalent to the shell command @echo "hello world"@:
 --
@@ -570,4 +594,4 @@ toChunks ::
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Output Stream
-toChunks path args = processChunks path args Stream.nil
+toChunks path args = pipeChunks path args Stream.nil

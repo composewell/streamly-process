@@ -29,11 +29,13 @@ import qualified Streamly.Prelude as S
 import qualified Streamly.System.Process as Proc
 
 -- Internal imports
-import qualified Streamly.Internal.Data.Array.Stream.Foreign
-    as AS (arraysOf, concat)
-import qualified Streamly.Internal.Data.Stream.IsStream as S (nilM, lefts, rights)
+import qualified Streamly.Internal.Data.Array.Stream.Foreign as AS
+    (arraysOf, concat)
+import qualified Streamly.Internal.Data.Stream.IsStream as S
+    (nilM, lefts, rights)
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, getBytes)
 import qualified Streamly.Internal.System.Process as Proc
+    (processChunks', processBytes', toChunks', toBytes')
 
 newtype SimpleError = SimpleError String
     deriving Show
@@ -209,14 +211,14 @@ toChunks2 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-processBytes1 :: Property
-processBytes1 =
+pipeBytes1 :: Property
+pipeBytes1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
-                genStrm = Proc.processBytes
+                genStrm = Proc.pipeBytes
                             trBinary
                             ["[a-z]", "[A-Z]"]
                             inputStream
@@ -226,13 +228,13 @@ processBytes1 =
             charList <- run $ S.toList charUpperStrm
             listEquals (==) genList charList
 
-processBytes2 :: Property
-processBytes2 = monadicIO $ run checkFailAction
+pipeBytes2 :: Property
+pipeBytes2 = monadicIO $ run checkFailAction
     where
 
     action = do
         S.drain $
-           Proc.processBytes
+           Proc.pipeBytes
                interpreterFile [interpreterArg, executableFileFail] S.nil
         return False
 
@@ -241,13 +243,13 @@ processBytes2 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-processBytes3 :: Property
-processBytes3 = monadicIO $ run checkFailAction
+pipeBytes3 :: Property
+pipeBytes3 = monadicIO $ run checkFailAction
     where
 
     action = do
         S.drain $
-            Proc.processBytes
+            Proc.pipeBytes
             interpreterFile
             [interpreterArg, executableFilePass]
             (S.nilM $ throwM (SimpleError failErrorMessage))
@@ -268,7 +270,7 @@ processChunksConsumeAllInput =
                 inputStream = S.fromList ls
 
                 genStrm = AS.concat $
-                    Proc.processChunks
+                    Proc.pipeChunks
                     trBinary
                     ["[a-z]", "[A-Z]"]
                     (AS.arraysOf arrayChunkSize inputStream)
@@ -288,7 +290,7 @@ processChunksConsumePartialInput =
                 inputStream = S.fromList ls
 
                 procOutput = AS.concat $
-                    Proc.processChunks
+                    Proc.pipeChunks
                     path
                     ["-n", "1"]
                     (AS.arraysOf arrayChunkSize inputStream)
@@ -308,7 +310,7 @@ processChunksProcessFailure = monadicIO $ run $ catch runProcess checkExitCode
 
     runProcess = do
         S.drain $
-            Proc.processChunks
+            Proc.pipeChunks
                 interpreterFile [interpreterArg, executableFileFail] S.nil
         return False
 
@@ -321,7 +323,7 @@ processChunksInputFailure = monadicIO $ run $ catch runProcess checkException
 
     runProcess = do
         S.drain $
-            Proc.processChunks
+            Proc.pipeChunks
             interpreterFile
             [interpreterArg, executableFilePass]
             (S.nilM $ throwM (SimpleError failErrorMessage))
@@ -499,12 +501,12 @@ main = do
                 prop "processBytes' on failing executable" processBytes'3
                 prop "processBytes' using error stream" processBytes'4
 
-            describe "processBytes" $ do
-                prop "processBytes tr = map toUpper" processBytes1
-                prop "processBytes on failing executable" processBytes2
-                prop "processBytes using error stream" processBytes3
+            describe "pipeBytes" $ do
+                prop "pipeBytes tr = map toUpper" pipeBytes1
+                prop "pipeBytes on failing executable" pipeBytes2
+                prop "pipeBytes using error stream" pipeBytes3
 
-            -- Based on processBytes/Chunks
+            -- Based on pipeBytes/Chunks
             describe "toChunks'" $ do
                 prop "toChunks' cat = FH.toChunks" toChunks1
                 prop "toChunks' on failing executable" toChunks2
