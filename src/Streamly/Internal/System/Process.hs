@@ -60,11 +60,11 @@ module Streamly.Internal.System.Process
 
     -- * Transformation
     , pipeBytes
-    , processBytes'
-    , processChunksWith
+    , pipeBytes'
+    , pipeChunksWith
     , pipeChunks
-    , processChunks'With
-    , processChunks'
+    , pipeChunks'With
+    , pipeChunks'
 
     -- * Deprecated
     , processBytes
@@ -322,15 +322,15 @@ putChunksClose h input =
 toChunksClose :: (IsStream t, MonadAsync m) => Handle -> t m (Array Word8)
 toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.getChunks h)
 
-{-# INLINE processChunksWithAction #-}
-processChunksWithAction ::
+{-# INLINE pipeChunksWithAction #-}
+pipeChunksWithAction ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => ((Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> t m a)
     -> (Config -> Config)
     -> FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
     -> t m a     -- ^ Output stream
-processChunksWithAction run modCfg path args =
+pipeChunksWithAction run modCfg path args =
     Stream.bracket'
           alloc cleanupNormal cleanupException cleanupException run
 
@@ -338,16 +338,16 @@ processChunksWithAction run modCfg path args =
 
     alloc = liftIO $ createProc' modCfg path args
 
-{-# INLINE processChunks'With #-}
-processChunks'With ::
+{-# INLINE pipeChunks'With #-}
+pipeChunks'With ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
     -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
-processChunks'With modifier path args input =
-    processChunksWithAction run (modifier . pipeStdErr) path args
+pipeChunks'With modifier path args input =
+    pipeChunksWithAction run (modifier . pipeStdErr) path args
 
     where
 
@@ -357,16 +357,16 @@ processChunks'With modifier path args input =
             `parallel` Stream.map Right (toChunksClose stdoutH)
     run _ = error "processChunks': Not reachable"
 
-{-# INLINE processChunks' #-}
-processChunks' ::
+{-# INLINE pipeChunks' #-}
+pipeChunks' ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
-processChunks' = processChunks'With id
+pipeChunks' = pipeChunks'With id
 
--- | @processBytes' path args input@ runs the executable at @path@ using @args@
+-- | @pipeBytes' path args input@ runs the executable at @path@ using @args@
 -- as arguments and @input@ stream as its standard input.  The error stream of
 -- the executable is presented as 'Left' values in the resulting stream and
 -- output stream as 'Right' values.
@@ -377,37 +377,37 @@ processChunks' = processChunks'With id
 -- world" | tr [:lower:] [:upper:]@:
 --
 -- >>> :{
---    processBytes' "echo" ["hello world"] Stream.nil
+--    pipeBytes' "echo" ["hello world"] Stream.nil
 --  & Stream.rights
---  & processBytes' "tr" ["[:lower:]", "[:upper:]"]
+--  & pipeBytes' "tr" ["[:lower:]", "[:upper:]"]
 --  & Stream.rights
 --  & Stream.fold Stdio.write
 --  :}
 --HELLO WORLD
 --
 -- @since 0.1.0
-{-# INLINE processBytes' #-}
-processBytes' ::
+{-# INLINE pipeBytes' #-}
+pipeBytes' ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => FilePath         -- ^ Executable name or path
     -> [String]         -- ^ Arguments
     -> t m Word8        -- ^ Input Stream
     -> t m (Either Word8 Word8) -- ^ Output Stream
-processBytes' path args input =
+pipeBytes' path args input =
     let input1 = ArrayStream.arraysOf defaultChunkSize input
-        output = processChunks' path args input1
+        output = pipeChunks' path args input1
      in Stream.unfoldMany (Unfold.either Array.read) output
 
-{-# INLINE processChunksWith #-}
-processChunksWith ::
+{-# INLINE pipeChunksWith #-}
+pipeChunksWith ::
     (IsStream t, MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
     -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Array Word8)    -- ^ Output stream
-processChunksWith modifier path args input =
-    processChunksWithAction run modifier path args
+pipeChunksWith modifier path args input =
+    pipeChunksWithAction run modifier path args
 
     where
 
@@ -447,7 +447,7 @@ pipeChunks ::
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Input stream
     -> t m (Array Word8)    -- ^ Output stream
-pipeChunks = processChunksWith id
+pipeChunks = pipeChunksWith id
 
 {-# DEPRECATED processChunks "Please use pipeChunks instead." #-}
 {-# INLINE processChunks #-}
@@ -519,7 +519,7 @@ processBytes = pipeBytes
 -- hello
 -- ((),())
 --
--- >>> toBytes' path args = Process.processBytes' path args Stream.nil
+-- >>> toBytes' path args = Process.pipeBytes' path args Stream.nil
 --
 -- @since 0.1.0
 {-# INLINE toBytes' #-}
@@ -528,7 +528,7 @@ toBytes' ::
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
     -> t m (Either Word8 Word8)    -- ^ Output Stream
-toBytes' path args = processBytes' path args Stream.nil
+toBytes' path args = pipeBytes' path args Stream.nil
 
 -- | See 'processBytes'. 'toBytes' is defined as:
 --
@@ -562,7 +562,7 @@ toBytes path args = processBytes path args Stream.nil
 -- hello
 -- ((),())
 --
--- >>> toChunks' path args = processChunks' path args Stream.nil
+-- >>> toChunks' path args = pipeChunks' path args Stream.nil
 --
 -- Prefer 'toChunks' over 'toBytes' when performance matters.
 --
@@ -573,7 +573,7 @@ toChunks' ::
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Either (Array Word8) (Array Word8))    -- ^ Output Stream
-toChunks' path args = processChunks' path args Stream.nil
+toChunks' path args = pipeChunks' path args Stream.nil
 
 -- | See 'pipeChunks'. 'toChunks' is defined as:
 --
