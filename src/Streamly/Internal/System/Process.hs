@@ -57,10 +57,16 @@ module Streamly.Internal.System.Process
     , toBytes'
     , toChunks
     , toChunks'
+    , toChars
+    , toLines
+    , toString
+    , toStdout
+    , toNull
 
     -- * Transformation
     , pipeBytes
     , pipeBytes'
+    , pipeChars
     , pipeChunksWith
     , pipeChunks
     , pipeChunks'With
@@ -76,9 +82,11 @@ where
 
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Function ((&))
 import Data.Word (Word8)
 import Streamly.Data.Array.Foreign (Array)
-import Streamly.Prelude (MonadAsync, parallel, IsStream, adapt)
+import Streamly.Data.Fold (Fold)
+import Streamly.Prelude (MonadAsync, parallel, IsStream, adapt, SerialT)
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
 
@@ -104,17 +112,20 @@ import System.Process
 #endif
 
 import qualified Streamly.Data.Array.Foreign as Array
+import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Prelude as Stream
 
 -- Internal imports
 import Streamly.Internal.System.IO (defaultChunkSize)
 
+import qualified Streamly.Internal.Console.Stdio as Stdio
 import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as ArrayStream (arraysOf)
 import qualified Streamly.Internal.Data.Stream.IsStream as Stream (bracket')
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (getChunks, putChunks)
+import qualified Streamly.Internal.Unicode.Stream as Unicode
 
 -- $setup
 -- >>> :set -XFlexibleContexts
@@ -462,9 +473,7 @@ processChunks = pipeChunks
 -- | Like 'pipeChunks' except that it works on a stream of bytes instead of
 -- a stream of chunks.
 --
--- We can write the example in 'pipeChunks' as follows. Notice how
--- seamlessly we can replace the @tr@ process with the Haskell @toUpper@
--- function:
+-- We can write the example in 'pipeChunks' as follows.
 --
 -- >>> :{
 --    Process.toBytes "echo" ["hello world"]
@@ -495,6 +504,39 @@ processBytes ::
     -> t m Word8    -- ^ Input Stream
     -> t m Word8    -- ^ Output Stream
 processBytes = pipeBytes
+
+-- | Like 'pipeChunks' except that it works on a stream of chars instead of
+-- a stream of chunks.
+--
+-- >>> :{
+--    Process.toChars "echo" ["hello world"]
+--  & Process.pipeChars "tr" ["[a-z]", "[A-Z]"]
+--  & Stdio.putChars
+--  :}
+--HELLO WORLD
+--
+-- We can seamlessly replace the @tr@ process with the Haskell @toUpper@
+-- function:
+--
+-- >>> :{
+--    Process.toChars "echo" ["hello world"]
+--  & map toUpper
+--  & Stdio.putChars
+--  :}
+--HELLO WORLD
+--
+-- /pre-release/
+{-# INLINE pipeChars #-}
+pipeChars ::
+    (MonadCatch m, MonadAsync m)
+    => FilePath     -- ^ Executable name or path
+    -> [String]     -- ^ Arguments
+    -> SerialT m Char    -- ^ Input Stream
+    -> SerialT m Char    -- ^ Output Stream
+pipeChars path args input =
+    Unicode.encodeUtf8 input
+        & pipeBytes path args
+        & Unicode.decodeUtf8
 
 -------------------------------------------------------------------------------
 -- Generation
@@ -595,3 +637,59 @@ toChunks ::
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Output Stream
 toChunks path args = pipeChunks path args Stream.nil
+
+-- |
+-- >>> toChars path args = toBytes path args & Unicode.decodeUtf8
+--
+{-# INLINE toChars #-}
+toChars ::
+    (MonadAsync m, MonadCatch m)
+    => FilePath       -- ^ Executable name or path
+    -> [String]       -- ^ Arguments
+    -> SerialT m Char -- ^ Output Stream
+toChars path args = toBytes path args & Unicode.decodeUtf8
+
+-- |
+-- >>> toLines path args f = toChars path args & Unicode.lines f
+--
+{-# INLINE toLines #-}
+toLines ::
+    (MonadAsync m, MonadCatch m)
+    => Fold m Char a
+    -> FilePath       -- ^ Executable name or path
+    -> [String]       -- ^ Arguments
+    -> SerialT m a -- ^ Output Stream
+toLines f path args = toChars path args & Unicode.lines f
+
+-- |
+-- >>> toString path args = toChars path args & Stream.fold Fold.toList
+--
+{-# INLINE toString #-}
+toString ::
+    (MonadAsync m, MonadCatch m)
+    => FilePath -- ^ Executable name or path
+    -> [String] -- ^ Arguments
+    -> m String
+toString path args = toChars path args & Stream.fold Fold.toList
+
+-- |
+-- >>> toStdout path args = toChunks path args & Stdio.putChunks
+--
+{-# INLINE toStdout #-}
+toStdout ::
+    (MonadAsync m, MonadCatch m)
+    => FilePath -- ^ Executable name or path
+    -> [String] -- ^ Arguments
+    -> m ()
+toStdout path args = toChunks path args & Stdio.putChunks
+
+-- |
+-- >>> toNull path args = toChunks path args & Stream.drain
+--
+{-# INLINE toNull #-}
+toNull ::
+    (MonadAsync m, MonadCatch m)
+    => FilePath -- ^ Executable name or path
+    -> [String] -- ^ Arguments
+    -> m ()
+toNull path args = toChunks path args & Stream.drain
