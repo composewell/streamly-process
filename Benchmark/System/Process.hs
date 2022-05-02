@@ -107,7 +107,7 @@ trToStderr = "./writeTrToError.sh"
 
 trToStderrContent :: String
 trToStderrContent =
-    "tr [a-z] [A-Z] <&0 >&2"
+    "#!/bin/sh\ntr [a-z] [A-Z] <&0 >&2"
 
 createExecutable :: IO ()
 createExecutable = do
