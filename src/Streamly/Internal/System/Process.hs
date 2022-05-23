@@ -355,7 +355,7 @@ pipeChunks'With modifier path args input =
         putChunksClose stdinH input
             `parallel` Stream.map Left (toChunksClose stderrH)
             `parallel` Stream.map Right (toChunksClose stdoutH)
-    run _ = error "processChunks': Not reachable"
+    run _ = error "pipeChunks'With: Not reachable"
 
 {-# INLINE pipeChunks' #-}
 pipeChunks' ::
@@ -413,7 +413,7 @@ pipeChunksWith modifier path args input =
 
     run (Just stdinH, Just stdoutH, _, _) =
         putChunksClose stdinH input `parallel` toChunksClose stdoutH
-    run _ = error "processChunks: Not reachable"
+    run _ = error "pipeChunksWith: Not reachable"
 
 -- | @pipeChunks file args input@ runs the executable @file@ specified by
 -- its name or path using @args@ as arguments and @input@ stream as its
@@ -530,9 +530,9 @@ toBytes' ::
     -> t m (Either Word8 Word8)    -- ^ Output Stream
 toBytes' path args = pipeBytes' path args Stream.nil
 
--- | See 'processBytes'. 'toBytes' is defined as:
+-- | See 'pipeBytes'. 'toBytes' is defined as:
 --
--- >>> toBytes path args = processBytes path args Stream.nil
+-- >>> toBytes path args = pipeBytes path args Stream.nil
 --
 -- The following code is equivalent to the shell command @echo "hello world"@:
 --
@@ -549,7 +549,7 @@ toBytes ::
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
     -> t m Word8    -- ^ Output Stream
-toBytes path args = processBytes path args Stream.nil
+toBytes path args = pipeBytes path args Stream.nil
 
 -- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
 -- of @Word8@.
