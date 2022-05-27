@@ -58,7 +58,7 @@ jobs:
       matrix:
         name:
           - doctest
-          - 9.2.1
+          - 9.2.2
           - 9.0.1
           - 8.10.7+sdist # sdist with cabal.project
           - 8.10.7+Werror
@@ -70,15 +70,15 @@ jobs:
         include:
 
           - name: doctest
-            ghc_version: 9.2.1
+            ghc_version: 9.2.2
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.6
             doctest: "y"
             cabal_project: cabal.project.user
 
-          - name: 9.2.1
-            ghc_version: 9.2.1
+          - name: 9.2.2
+            ghc_version: 9.2.2
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.6
@@ -174,8 +174,6 @@ jobs:
 
     - name: Run packcheck
       run: |
-        bash -c "$PACKCHECK_LOCAL_PATH $BUILD"
-
         if test -n "$DOCTEST"
         then
           mkdir -p $HOME/.cabal/bin
@@ -187,5 +185,7 @@ jobs:
           cabal update
           cabal build all --project-file cabal.project.user
           $HOME/.cabal/bin/cabal-docspec --version
-          $HOME/.cabal/bin/cabal-docspec --timeout 60 --check-properties --property-variables xs
+          $HOME/.cabal/bin/cabal-docspec --timeout 60
+        else
+          bash -c "$PACKCHECK_LOCAL_PATH $BUILD"
         fi
