@@ -226,7 +226,7 @@ pipeChars = pipeWith Process.pipeChars
 -------------------------------------------------------------------------------
 -- Generation
 -------------------------------------------------------------------------------
---
+
 -- |
 --
 -- >>> toBytes = streamWith Process.toBytes
@@ -236,9 +236,9 @@ pipeChars = pipeWith Process.pipeChars
 -- >>> toBytes "echo hello\\ world" & Stdio.putBytes
 --hello world
 -- >>> toBytes "echo 'hello world'" & Stdio.putBytes
---'hello world'
+--hello world
 -- >>> toBytes "echo \"hello world\"" & Stdio.putBytes
---"hello world"
+--hello world
 --
 -- /Pre-release/
 {-# INLINE toBytes #-}
