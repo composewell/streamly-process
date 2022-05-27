@@ -54,9 +54,7 @@ module Streamly.Internal.System.Process
 
     -- * Generation
     , toBytes
-    , toBytes'
     , toChunks
-    , toChunks'
     , toChars
     , toLines
     , toString
@@ -65,12 +63,18 @@ module Streamly.Internal.System.Process
 
     -- * Transformation
     , pipeBytes
-    , pipeBytes'
-    , pipeChars
-    , pipeChunksWith
     , pipeChunks
-    , pipeChunks'With
+    , pipeChars
+
+    -- * Stderr
+    , toBytes' -- toBytesEither ?
+    , toChunks'
+    , pipeBytes'
     , pipeChunks'
+
+    -- * Helpers
+    , pipeChunksWith
+    , pipeChunks'With
 
     -- * Deprecated
     , processBytes
