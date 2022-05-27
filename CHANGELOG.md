@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+* `toChunks` and `toBytes` now make the stdin available to the process being
+  executed.
+
 ## 0.2.0.1 (Mar 2022)
 
 * Fix the test suite.

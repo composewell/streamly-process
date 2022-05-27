@@ -48,11 +48,15 @@ module Streamly.Internal.System.Process
     (
     -- * Process Configuration
       Config
+    , inheritStdin
+    , inheritStdout
+    , pipeStdErr
 
     -- * Exceptions
     , ProcessFailure (..)
 
     -- * Generation
+    -- | stdout of the process is redirected to output stream.
     , toBytes
     , toChunks
     , toChars
@@ -62,17 +66,24 @@ module Streamly.Internal.System.Process
     , toNull
 
     -- * Transformation
+    -- | The input stream is redirected to the stdin of the process, stdout of
+    -- the process is redirected to the output stream.
     , pipeBytes
     , pipeChunks
     , pipeChars
 
     -- * Stderr
+    -- | Like other "Generation" routines but along with stdout, stderr is also
+    -- included in the output stream. stdout is converted to 'Right' values in
+    -- the output stream and stderr is converted to 'Left' values.
     , toBytes' -- toBytesEither ?
     , toChunks'
     , pipeBytes'
     , pipeChunks'
 
     -- * Helpers
+    , toChunksWith
+    , toChunks'With
     , pipeChunksWith
     , pipeChunks'With
 
@@ -212,6 +223,12 @@ mkConfig path args = Config $ CreateProcess
 
 pipeStdErr :: Config -> Config
 pipeStdErr (Config cfg) = Config $ cfg { std_err = CreatePipe }
+
+inheritStdin :: Config -> Config
+inheritStdin (Config cfg) = Config $ cfg { std_in = Inherit }
+
+inheritStdout :: Config -> Config
+inheritStdout (Config cfg) = Config $ cfg { std_out = Inherit }
 #endif
 
 -------------------------------------------------------------------------------
@@ -546,7 +563,39 @@ pipeChars path args input =
 -------------------------------------------------------------------------------
 -- Generation
 -------------------------------------------------------------------------------
---
+
+{-# INLINE toChunks'With #-}
+toChunks'With ::
+    (IsStream t, MonadCatch m, MonadAsync m)
+    => (Config -> Config)   -- ^ Config modifier
+    -> FilePath             -- ^ Executable name or path
+    -> [String]             -- ^ Arguments
+    -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
+toChunks'With modifier path args =
+    pipeChunksWithAction run (modifier . inheritStdin . pipeStdErr) path args
+
+    where
+
+    run (_, Just stdoutH, Just stderrH, _) =
+        Stream.map Left (toChunksClose stderrH)
+            `parallel` Stream.map Right (toChunksClose stdoutH)
+    run _ = error "toChunks'With: Not reachable"
+
+{-# INLINE toChunksWith #-}
+toChunksWith ::
+    (IsStream t, MonadCatch m, MonadAsync m)
+    => (Config -> Config)   -- ^ Config modifier
+    -> FilePath             -- ^ Executable name or path
+    -> [String]             -- ^ Arguments
+    -> t m (Array Word8)    -- ^ Output stream
+toChunksWith modifier path args =
+    pipeChunksWithAction run (modifier . inheritStdin) path args
+
+    where
+
+    run (_, Just stdoutH, _, _) = toChunksClose stdoutH
+    run _ = error "toChunksWith: Not reachable"
+
 -- | @toBytes' path args@ runs the executable at @path@ using @args@ as
 -- arguments and returns a stream of 'Either' bytes. The 'Left' values are from
 -- @stderr@ and the 'Right' values are from @stdout@ of the executable.
@@ -557,7 +606,6 @@ pipeChars path args input =
 -- to @stderr@, then uses folds from "Streamly.Console.Stdio" to write them
 -- back to @stdout@ and @stderr@ respectively:
 --
---
 -- >>> :{
 --   Process.toBytes' "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
 -- & Stream.fold (Fold.partition Stdio.writeErr Stdio.write)
@@ -566,8 +614,6 @@ pipeChars path args input =
 -- hello
 -- ((),())
 --
--- >>> toBytes' path args = Process.pipeBytes' path args Stream.nil
---
 -- @since 0.1.0
 {-# INLINE toBytes' #-}
 toBytes' ::
@@ -575,13 +621,12 @@ toBytes' ::
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
     -> t m (Either Word8 Word8)    -- ^ Output Stream
-toBytes' path args = pipeBytes' path args Stream.nil
+toBytes' path args =
+    let output = toChunks' path args
+     in Stream.unfoldMany (Unfold.either Array.read) output
 
--- | See 'pipeBytes'. 'toBytes' is defined as:
---
--- >>> toBytes path args = pipeBytes path args Stream.nil
---
--- The following code is equivalent to the shell command @echo "hello world"@:
+-- | The following code is equivalent to the shell command @echo "hello
+-- world"@:
 --
 -- >>> :{
 --    Process.toBytes "echo" ["hello world"]
@@ -596,7 +641,9 @@ toBytes ::
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
     -> t m Word8    -- ^ Output Stream
-toBytes path args = pipeBytes path args Stream.nil
+toBytes path args =
+    let output = toChunks path args
+     in Stream.unfoldMany Array.read output
 
 -- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
 -- of @Word8@.
@@ -609,30 +656,29 @@ toBytes path args = pipeBytes path args Stream.nil
 -- hello
 -- ((),())
 --
--- >>> toChunks' path args = pipeChunks' path args Stream.nil
+-- >>> toChunks' = toChunks'With id
 --
 -- Prefer 'toChunks' over 'toBytes' when performance matters.
 --
--- @since 0.1.0
+-- /Pre-release/
 {-# INLINE toChunks' #-}
 toChunks' ::
     (IsStream t, MonadAsync m, MonadCatch m)
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Either (Array Word8) (Array Word8))    -- ^ Output Stream
-toChunks' path args = pipeChunks' path args Stream.nil
+toChunks' = toChunks'With id
 
--- | See 'pipeChunks'. 'toChunks' is defined as:
---
--- >>> toChunks path args = pipeChunks path args Stream.nil
---
--- The following code is equivalent to the shell command @echo "hello world"@:
+-- | The following code is equivalent to the shell command @echo "hello
+-- world"@:
 --
 -- >>> :{
 --    Process.toChunks "echo" ["hello world"]
 --  & Stream.fold Stdio.writeChunks
 --  :}
 --hello world
+--
+-- >>> toChunks = toChunksWith id
 --
 -- @since 0.1.0
 {-# INLINE toChunks #-}
@@ -641,7 +687,7 @@ toChunks ::
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> t m (Array Word8)    -- ^ Output Stream
-toChunks path args = pipeChunks path args Stream.nil
+toChunks = toChunksWith id
 
 -- |
 -- >>> toChars path args = toBytes path args & Unicode.decodeUtf8
@@ -687,6 +733,12 @@ toStdout ::
     -> [String] -- ^ Arguments
     -> m ()
 toStdout path args = toChunks path args & Stdio.putChunks
+{-
+-- Directly inherits stdout instead.
+toStdout path args = do
+    _ <- liftIO $ createProc' (inheritStdin . inheritStdout) path args
+    return ()
+-}
 
 -- |
 -- >>> toNull path args = toChunks path args & Stream.drain
