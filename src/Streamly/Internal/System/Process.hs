@@ -93,7 +93,7 @@ module Streamly.Internal.System.Process
     )
 where
 
--- #define USE_NATIVE
+#define USE_NATIVE
 
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -109,6 +109,7 @@ import System.IO (hClose, Handle)
 import Control.Exception (Exception(..), catch, throwIO, SomeException)
 import System.Posix.Process (ProcessStatus(..))
 import Streamly.Internal.System.Process.Posix
+import Control.Concurrent (forkIO)
 #else
 import Control.Concurrent (forkIO)
 import Control.Exception (Exception(..), catch, throwIO)
@@ -141,6 +142,9 @@ import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (getChunks, putChunks)
 import qualified Streamly.Internal.Unicode.Stream as Unicode
+import GHC.IO.Exception (IOException(..), IOErrorType (ResourceVanished))
+import Foreign.C (ePIPE, Errno (..))
+import Control.Monad (unless, void)
 
 -- $setup
 -- >>> :set -XFlexibleContexts
@@ -185,6 +189,13 @@ mkConfig _ _ = Config False
 
 pipeStdErr :: Config -> Config
 pipeStdErr (Config _) = Config True
+
+inheritStdin :: Config -> Config
+inheritStdin (Config _) = Config True
+
+inheritStdout :: Config -> Config
+inheritStdout (Config _) = Config True
+
 #else
 newtype Config = Config CreateProcess
 
@@ -288,7 +299,7 @@ cleanupException :: MonadIO m =>
     (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> m ()
 cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
     -- Send a SIGTERM to the process
-    terminateProcess ph
+    terminate ph
 
     -- Ideally we should be closing the handle without flushing the buffers so
     -- that we cannot get a SIGPIPE. But there seems to be no way to do that as
@@ -298,7 +309,7 @@ cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
     whenJust hClose stderrMaybe
 
     -- Non-blocking wait for the process to go away
-    void $ forkIO (void $ waitForProcess ph)
+    void $ forkIO (void $ wait ph)
 
     where
 
