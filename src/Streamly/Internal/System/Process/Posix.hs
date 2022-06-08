@@ -18,6 +18,7 @@ module Streamly.Internal.System.Process.Posix
     , newProcess
     , wait
     , getStatus
+    , terminate
 
     -- * IPC
     , mkPipe
@@ -39,6 +40,7 @@ import System.IO.Error (isDoesNotExistError)
 import System.Posix.IO (createPipe, dupTo, closeFd)
 import System.Posix.Process (forkProcess, executeFile, ProcessStatus)
 import System.Posix.Types (ProcessID, Fd(..), CDev, CIno)
+import System.Posix.Signals (signalProcess, sigTERM)
 import System.Posix.Internals (fdGetMode)
 
 import qualified GHC.IO.FD as FD
@@ -316,3 +318,6 @@ getStatus proc@(Process pid _ procStatus) = do
         if isDoesNotExistError e
         then return (Nothing, Nothing)
         else throwIO e
+
+terminate :: Process -> IO ()
+terminate (Process pid _ _) = signalProcess sigTERM pid
