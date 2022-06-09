@@ -5,9 +5,9 @@ packages:
 extra-deps:
 - unicode-data-0.3.0
 - git: https://github.com/composewell/streamly
-  commit: "cbccb7777792cb4bf8dd8716929f4e28ea6cf718"
+  commit: "1ee11e87ec920df66e6bb1299ab000948df90ae5"
 - git: https://github.com/composewell/streamly
-  commit: "cbccb7777792cb4bf8dd8716929f4e28ea6cf718"
+  commit: "1ee11e87ec920df66e6bb1299ab000948df90ae5"
   subdirs:
     - core
 

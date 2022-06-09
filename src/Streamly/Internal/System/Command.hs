@@ -85,8 +85,8 @@ import qualified Streamly.Internal.System.Process as Process
 {-# INLINE quotedWord #-}
 quotedWord :: MonadCatch m => Parser m Char String
 quotedWord =
-    let isQuote = (`elem` ['"', '\''])
-     in Parser.wordQuotedBy (== '\\') isQuote isQuote id isSpace Fold.toList
+    let isQt = (`elem` ['"', '\''])
+     in Parser.wordQuotedBy False (== '\\') isQt isQt id isSpace Fold.toList
 
 -- | A modifier for stream generation APIs in "Streamly.System.Process" to
 -- generate streams from command strings.
