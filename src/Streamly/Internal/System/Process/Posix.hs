@@ -33,8 +33,8 @@ import Data.Bifunctor (first)
 import Data.Tuple (swap)
 import GHC.IO.Device (IODeviceType(..))
 import GHC.IO.Encoding (getLocaleEncoding)
-import GHC.IO.Handle.FD (mkHandleFromFD)
-import System.IO (IOMode(..), Handle)
+import GHC.IO.Handle.FD (mkHandleFromFD, stderr)
+import System.IO (IOMode(..), Handle, hPutStrLn)
 import System.IO.Error (isDoesNotExistError)
 import System.Posix.IO (createPipe, dupTo, closeFd)
 import System.Posix.Process (forkProcess, executeFile, ProcessStatus)
@@ -113,9 +113,18 @@ mkPipeDupChild direction childFd = do
     (child, parent) <- fmap setDirection createPipe
     let parentAction = closeFd child
         childAction =
-            closeFd parent >> void (dupTo child childFd) >> closeFd child
+            logMessage "child: closing parent" direction parent
+            >> closeFd parent
+            >> logMessage "child: closed parent" direction parent
+            >> void (dupTo child childFd)
+            >> logMessage "child: closing child" direction child
+            >> closeFd child
+            >> logMessage "child: closed child" direction child
         failureAction = closeFd child >> closeFd parent
     return (parent, (parentAction, childAction, failureAction))
+    where
+        logMessage action dir fd = hPutStrLn stderr (action ++ " direction: " ++ show dir ++ " fd: " ++ show fd)
+        -- logMessage action dir fd = hPutStrLn stderr String ()
 
 -- XXX We could possibly combine the triples from individual pipes in a more
 -- idiomatic manner.
@@ -143,7 +152,14 @@ mkStdioPipes pipeStdErr = do
     -}
 
     let parentAction = inpParent >> outParent >> errParent -- >> excParent
-        childAction = inpChild >> outChild >> errChild -- >> excChild
+        childAction =
+            hPutStrLn stderr "child input action doing" 
+            >> inpChild
+            >> hPutStrLn stderr "child input action done"
+            >> hPutStrLn stderr "child output action doing"
+            >> outChild
+            >> hPutStrLn stderr "child output action done"
+            >> errChild -- >> excChild
         failureAction = inpFail >> outFail >> errFail -- >> excFail
 
     inpH <- toHandle WriteMode inp

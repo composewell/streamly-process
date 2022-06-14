@@ -273,9 +273,9 @@ cleanupNormal :: MonadIO m =>
     (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> m ()
 cleanupNormal (_, _, _, procHandle) = liftIO $ do
 #ifdef USE_NATIVE
-    -- liftIO $ putStrLn "cleanupNormal waiting"
+    liftIO $ putStrLn "cleanupNormal waiting"
     status <- wait procHandle
-    -- liftIO $ putStrLn "cleanupNormal done"
+    liftIO $ putStrLn "cleanupNormal done"
     case status of
         Exited ExitSuccess -> return ()
         Exited (ExitFailure code) -> throwM $ ProcessFailure code
