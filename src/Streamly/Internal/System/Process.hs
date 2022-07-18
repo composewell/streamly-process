@@ -104,7 +104,7 @@ import Data.Function ((&))
 import Data.Word (Word8)
 import Foreign.C.Error (Errno(..), ePIPE)
 import GHC.IO.Exception (IOException(..), IOErrorType(..))
-import Streamly.Data.Array.Foreign (Array)
+import Streamly.Data.Array.Unboxed (Array)
 import Streamly.Data.Fold (Fold)
 import Streamly.Prelude (MonadAsync, parallel, IsStream, adapt, SerialT)
 import System.Exit (ExitCode(..))
@@ -126,7 +126,7 @@ import System.Process
     )
 #endif
 
-import qualified Streamly.Data.Array.Foreign as Array
+import qualified Streamly.Data.Array.Unboxed as Array
 import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Prelude as Stream
 

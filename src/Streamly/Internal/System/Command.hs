@@ -61,7 +61,7 @@ where
 import Control.Monad.Catch (MonadCatch)
 import Data.Char (isSpace)
 import Data.Word (Word8)
-import Streamly.Data.Array.Foreign (Array)
+import Streamly.Data.Array.Unboxed (Array)
 import Streamly.Data.Fold (Fold)
 import Streamly.Internal.Data.Parser (Parser)
 import Streamly.Prelude (MonadAsync, SerialT)

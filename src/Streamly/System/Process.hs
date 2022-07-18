@@ -134,7 +134,7 @@ import Streamly.Internal.System.Process
 -- >>> import Data.Char (toUpper)
 -- >>> import Data.Function ((&))
 -- >>> import qualified Streamly.Console.Stdio as Stdio
--- >>> import qualified Streamly.Data.Array.Foreign as Array
+-- >>> import qualified Streamly.Data.Array.Unboxed as Array
 -- >>> import qualified Streamly.Data.Fold as Fold
 -- >>> import qualified Streamly.Prelude as Stream
 -- >>> import qualified Streamly.System.Process as Process
