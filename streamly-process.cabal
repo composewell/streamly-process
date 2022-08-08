@@ -51,14 +51,18 @@ flag use-gauge
 common compile-options
   default-language: Haskell2010
   ghc-options:
-    -Wall
-    -Wcompat
-    -Wunrecognised-warning-flags
-    -Widentities
-    -Wincomplete-record-updates
-    -Wincomplete-uni-patterns
-    -Wredundant-constraints
-    -Wnoncanonical-monad-instances
+    -Weverything
+    -Wno-implicit-prelude
+    -Wno-missing-deriving-strategies
+    -Wno-missing-exported-signatures
+    -Wno-missing-import-lists
+    -Wno-missing-local-signatures
+    -Wno-missing-safe-haskell-mode
+    -Wno-missed-specialisations
+    -Wno-all-missed-specialisations
+    -Wno-monomorphism-restriction
+    -Wno-prepositive-qualified-module
+    -Wno-unsafe
 
 common optimization-options
   ghc-options:

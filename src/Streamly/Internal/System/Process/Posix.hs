@@ -1,3 +1,4 @@
+{-# LANGUAGE Safe #-}
 -- |
 -- Module      : Streamly.Internal.System.Process.Posix
 -- Copyright   : (c) 2020 Composewell Technologies
