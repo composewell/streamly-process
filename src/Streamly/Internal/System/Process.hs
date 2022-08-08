@@ -95,10 +95,15 @@ where
 
 -- #define USE_NATIVE
 
+import Control.Exception (Exception(..), catch, throwIO)
+import Control.Monad (void, unless)
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Concurrent (forkIO)
 import Data.Function ((&))
 import Data.Word (Word8)
+import Foreign.C.Error (Errno(..), ePIPE)
+import GHC.IO.Exception (IOException(..), IOErrorType(..))
 import Streamly.Data.Array.Foreign (Array)
 import Streamly.Data.Fold (Fold)
 import Streamly.Prelude (MonadAsync, parallel, IsStream, adapt, SerialT)
@@ -106,16 +111,10 @@ import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
 
 #ifdef USE_NATIVE
-import Control.Exception (Exception(..), catch, throwIO, SomeException)
+import Control.Exception (SomeException)
 import System.Posix.Process (ProcessStatus(..))
 import Streamly.Internal.System.Process.Posix
-import Control.Concurrent (forkIO)
 #else
-import Control.Concurrent (forkIO)
-import Control.Exception (Exception(..), catch, throwIO)
-import Control.Monad (void, unless)
-import Foreign.C.Error (Errno(..), ePIPE)
-import GHC.IO.Exception (IOException(..), IOErrorType(..))
 import System.Process
     ( ProcessHandle
     , CreateProcess(..)
@@ -142,9 +141,6 @@ import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (getChunks, putChunks)
 import qualified Streamly.Internal.Unicode.Stream as Unicode
-import GHC.IO.Exception (IOException(..), IOErrorType (ResourceVanished))
-import Foreign.C (ePIPE, Errno (..))
-import Control.Monad (unless, void)
 
 -- $setup
 -- >>> :set -XFlexibleContexts
@@ -299,7 +295,11 @@ cleanupException :: MonadIO m =>
     (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> m ()
 cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
     -- Send a SIGTERM to the process
+#ifdef USE_NATIVE
     terminate ph
+#else
+    terminateProcess ph
+#endif
 
     -- Ideally we should be closing the handle without flushing the buffers so
     -- that we cannot get a SIGPIPE. But there seems to be no way to do that as
@@ -309,7 +309,11 @@ cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
     whenJust hClose stderrMaybe
 
     -- Non-blocking wait for the process to go away
+#ifdef USE_NATIVE
     void $ forkIO (void $ wait ph)
+#else
+    void $ forkIO (void $ waitForProcess ph)
+#endif
 
     where
 
