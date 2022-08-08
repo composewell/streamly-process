@@ -93,8 +93,6 @@ module Streamly.Internal.System.Process
     )
 where
 
--- #define USE_NATIVE
-
 import Control.Exception (Exception(..), catch, throwIO)
 import Control.Monad (void, unless)
 import Control.Monad.Catch (MonadCatch, throwM)

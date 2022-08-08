@@ -48,6 +48,11 @@ flag use-gauge
   manual: True
   default: False
 
+flag use-native
+  description: Do not depend on the process package
+  manual: True
+  default: False
+
 common compile-options
   default-language: Haskell2010
   ghc-options:
@@ -70,6 +75,8 @@ common optimization-options
     -fdicts-strict
     -fspec-constr-recursive=16
     -fmax-worker-args=16
+  if flag(use-native)
+    cpp-options: -DUSE_NATIVE
 
 library
   import: compile-options, optimization-options
@@ -78,18 +85,20 @@ library
     Streamly.System.Process
     Streamly.Internal.System.Process
     Streamly.Internal.System.Command
-  if !os(windows)
+  if flag (use-native) && !os(windows)
     exposed-modules:
       Streamly.Internal.System.Process.Posix
   build-depends:
       base              >= 4.8   && < 5
     , exceptions        >= 0.8   && < 0.11
-    , process           >= 1.0   && < 1.7
     -- Uses internal APIs
     , streamly          == 0.9.0.*
-  if !os(windows)
-    build-depends:
-      unix              >= 2.5   && < 2.8
+  if !flag(use-native)
+    build-depends: process >= 1.0 && < 1.7
+  else
+     if !os(windows)
+       build-depends:
+         unix >= 2.5 && < 2.8
 
 -------------------------------------------------------------------------------
 -- Benchmarks
