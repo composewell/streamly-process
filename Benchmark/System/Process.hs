@@ -13,12 +13,12 @@ import System.IO
     , openFile
     , hClose
     )
-import System.Process (proc, createProcess, waitForProcess, callCommand)
 
 import qualified Streamly.Data.Fold as FL
 import qualified Streamly.FileSystem.Handle as FH
 import qualified Streamly.Prelude as S
 import qualified Streamly.System.Process as Proc
+import qualified Streamly.Internal.System.Command as Cmd
 
 -- Internal imports
 import qualified Streamly.Internal.FileSystem.Handle
@@ -71,16 +71,12 @@ largeByteFile = "./largeByteFile"
 generateByteFile :: IO ()
 generateByteFile = do
     ddPath <- which "dd"
-    let procObj = proc ddPath [
-                "if=" ++ devRandom,
-                "of=" ++ largeByteFile,
-                "count=" ++ show ddBlockCount,
-                "bs=" ++ show ddBlockSize
-            ]
-
-    (_, _, _, procHandle) <- createProcess procObj
-    _ <- waitForProcess procHandle
-    return ()
+    Cmd.toStdout
+        $ ddPath
+            ++ " if=" ++ devRandom
+            ++ " of=" ++ largeByteFile
+            ++ " count=" ++ show ddBlockCount
+            ++ " bs=" ++ show ddBlockSize
 
 -------------------------------------------------------------------------------
 -- Create a file filled with ascii chars
@@ -112,7 +108,7 @@ trToStderrContent =
 createExecutable :: IO ()
 createExecutable = do
     writeFile trToStderr trToStderrContent
-    callCommand ("chmod +x " ++ trToStderr)
+    Cmd.toStdout ("chmod +x " ++ trToStderr)
 
 -------------------------------------------------------------------------------
 -- Create and delete the temp data/exec files

@@ -110,7 +110,6 @@ benchmark Benchmark.System.Process
       streamly-process
     , base              >= 4.8   && < 5
     , directory         >= 1.2.2 && < 1.4
-    , process           >= 1.0   && < 1.7
     -- Uses internal APIs
     , streamly          == 0.9.0.*
 
@@ -140,7 +139,6 @@ test-suite Test.System.Process
     , directory         >= 1.2.2 && < 1.4
     , exceptions        >= 0.8   && < 0.11
     , hspec             >= 2.0   && < 3
-    , process           >= 1.0   && < 1.7
     , QuickCheck        >= 2.10  && < 2.15
     -- Uses internal APIs
     , streamly          == 0.9.0.*
