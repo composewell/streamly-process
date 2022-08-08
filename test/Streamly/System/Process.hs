@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module Main where
+module Main (main) where
 
 import Data.Function ((&))
 import Data.List ((\\))
@@ -71,18 +71,12 @@ minBlockCount = 1
 maxBlockCount :: Int
 maxBlockCount = 100
 
-minNumChar :: Int
-minNumChar = 1
-
-maxNumChar :: Int
-maxNumChar = 100 * 1024
-
 arrayChunkSize :: Int
 arrayChunkSize = 100
 
 interpreterFile :: FilePath
 interpreterArg :: String
-#if mingw32_HOST_OS == 1
+#ifdef mingw32_HOST_OS
 interpreterFile = "cmd.exe"
 interpreterArg = "/c"
 #else
@@ -91,21 +85,21 @@ interpreterArg = "sh"
 #endif
 
 executableFile :: FilePath
-#if mingw32_HOST_OS == 1
+#ifdef mingw32_HOST_OS
 executableFile = "./test/data/writeTrToError.bat"
 #else
 executableFile = "./test/data/writeTrToError.sh"
 #endif
 
 executableFileFail :: FilePath
-#if mingw32_HOST_OS == 1
+#ifdef mingw32_HOST_OS
 executableFileFail = "./test/data/failExec.bat"
 #else
 executableFileFail = "./test/data/failExec.sh"
 #endif
 
 executableFilePass :: FilePath
-#if mingw32_HOST_OS == 1
+#ifdef mingw32_HOST_OS
 executableFilePass = "./test/data/passExec.bat"
 #else
 executableFilePass = "./test/data/passExec.sh"
