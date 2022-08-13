@@ -128,7 +128,7 @@ module Streamly.Internal.System.Process
     )
 where
 
-import Control.Concurrent (forkIO)
+import Control.Concurrent (forkIO, runInBoundThread)
 import Control.Exception (Exception(..), catch, throwIO)
 import Control.Monad (void, unless)
 import Control.Monad.Catch (MonadCatch, throwM)
@@ -615,6 +615,14 @@ createProc' modCfg path args = do
     where
 
     Config cfg = modCfg $ mkConfig path args
+
+createProc'' ::
+       (Config -> Config) -- ^ Process attribute modifier
+    -> FilePath                         -- ^ Executable path
+    -> [String]                         -- ^ Arguments
+    -> IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
+createProc'' modCfg path args =
+    runInBoundThread $ createProc' modCfg path args
 
 {-# INLINE putChunksClose #-}
 putChunksClose :: MonadIO m =>

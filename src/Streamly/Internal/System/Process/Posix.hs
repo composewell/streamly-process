@@ -1,4 +1,4 @@
-{-# LANGUAGE Safe #-}
+-- {-# LANGUAGE Safe #-}
 -- |
 -- Module      : Streamly.Internal.System.Process.Posix
 -- Copyright   : (c) 2020 Composewell Technologies
@@ -35,16 +35,19 @@ import Data.Tuple (swap)
 import GHC.IO.Device (IODeviceType(..))
 import GHC.IO.Encoding (getLocaleEncoding)
 import GHC.IO.Handle.FD (mkHandleFromFD)
-import System.IO (IOMode(..), Handle)
+import System.IO (IOMode(..), Handle, hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
 import System.Posix.IO (createPipe, dupTo, closeFd)
-import System.Posix.Process (forkProcess, executeFile, ProcessStatus)
+import System.Posix.Process (forkProcess, executeFile, ProcessStatus, getProcessID)
 import System.Posix.Types (ProcessID, Fd(..), CDev, CIno)
 import System.Posix.Signals (signalProcess, sigTERM)
 import System.Posix.Internals (fdGetMode)
+import qualified Streamly.Internal.FileSystem.Dir as Dir
+import qualified Streamly.Prelude as Stream
 
 import qualified GHC.IO.FD as FD
 import qualified System.Posix.Process as Posix
+import Data.List (intercalate)
 
 -------------------------------------------------------------------------------
 -- Utilities to create stdio handles
@@ -54,13 +57,13 @@ import qualified System.Posix.Process as Posix
 -- We have to put the FDs into binary mode on Windows to avoid the newline
 -- translation that the CRT IO library does.
 setBinaryMode :: FD.FD -> IO ()
-#if defined(mingw32_HOST_OS)
-setBinaryMode fd = do
-    _ <- setmode (FD.fdFD fd) True
-    return ()
-#else
+
+
+
+
+
 setBinaryMode _ = return ()
-#endif
+
 
 -- See Posix.fdToHandle and GHC.IO.Handle.FD.fdToHandle
 -- See stdin, stdout, stderr in module GHC.IO.Handle.FD
@@ -112,9 +115,18 @@ mkPipeDupChild :: Direction -> Fd -> IO (Fd, (IO (), IO (), IO ()))
 mkPipeDupChild direction childFd = do
     let setDirection = if direction == ParentToChild then id else swap
     (child, parent) <- fmap setDirection createPipe
+    pid <- getProcessID
     let parentAction = closeFd child
         childAction =
-            closeFd parent >> void (dupTo child childFd) >> closeFd child
+            hPutStrLn stderr ("closing parent fd" ++ show parent) >>
+            closeFd parent >>
+            hPutStrLn stderr ("closed parent fd" ++ show parent) >>
+            hPutStrLn stderr ("duplicating child to fd" ++ show (child, childFd)) >>
+            void (dupTo child childFd) >>
+            hPutStrLn stderr ("duplicated child to fd" ++ show (child, childFd)) >>
+            hPutStrLn stderr ("closing child" ++ show child) >>
+            closeFd child >>
+            hPutStrLn stderr ("closed child" ++ show child)
         failureAction = closeFd child >> closeFd parent
     return (parent, (parentAction, childAction, failureAction))
 
@@ -144,7 +156,15 @@ mkStdioPipes pipeStdErr = do
     -}
 
     let parentAction = inpParent >> outParent >> errParent -- >> excParent
-        childAction = inpChild >> outChild >> errChild -- >> excChild
+        childAction =
+            hPutStrLn stderr "child input action doing"
+            >> inpChild
+            >> hPutStrLn stderr "child input action done"
+            >> hPutStrLn stderr "child output action doing"
+            >> outChild
+            >> hPutStrLn stderr "child output action done"
+            >> errChild -- >> excChild
+        -- childAction = inpChild >> outChild >> errChild -- >> excChild
         failureAction = inpFail >> outFail >> errFail -- >> excFail
 
     inpH <- toHandle WriteMode inp
@@ -238,6 +258,7 @@ newProcess ::
     -> IO Process
 newProcess action path args env = do
     pid <- forkProcess exec
+    hPutStrLn stderr ("parent process " ++ show pid)
     pidToProcess pid Nothing
 
     where
@@ -246,7 +267,12 @@ newProcess action path args env = do
     -- to the parent and clean up the parent fds. We can send the exceptions
     -- via a pipe like we do for threads.
     --
-    exec = action >> executeFile path True args env
+    exec = do
+        pid <- getProcessID
+        hPutStrLn stderr ("child process " ++ show pid)
+        fds <- Stream.toList . Stream.unfold Dir.readFiles $ ("/proc/" ++ show pid ++ "/fd")
+        hPutStrLn stderr (intercalate ", " fds)
+        action >> executeFile path True args env
 
 newtype ProcessDoesNotExist = ProcessDoesNotExist ProcessID deriving Show
 
