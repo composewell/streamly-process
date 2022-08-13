@@ -97,7 +97,8 @@ import Control.Exception (Exception(..), catch, throwIO)
 import Control.Monad (void, unless)
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Concurrent (forkIO)
+import Control.Concurrent (forkIO, forkOS, runInBoundThread)
+import Control.Concurrent.MVar
 import Data.Function ((&))
 import Data.Word (Word8)
 import Foreign.C.Error (Errno(..), ePIPE)
@@ -355,6 +356,14 @@ createProc' modCfg path args = do
     where
 
     Config cfg = modCfg $ mkConfig path args
+
+createProc'' ::
+       (Config -> Config) -- ^ Process attribute modifier
+    -> FilePath                         -- ^ Executable path
+    -> [String]                         -- ^ Arguments
+    -> IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
+createProc'' modCfg path args =
+    runInBoundThread $ createProc' modCfg path args
 
 {-# INLINE putChunksClose #-}
 putChunksClose :: (MonadIO m, IsStream t) =>
