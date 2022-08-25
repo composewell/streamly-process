@@ -93,6 +93,7 @@ library
     , exceptions        >= 0.8   && < 0.11
     -- Uses internal APIs
     , streamly          == 0.9.0.*
+    , streamly-core     == 0.1.0
   if !flag(use-native)
     build-depends: process >= 1.0 && < 1.7
   else
@@ -121,6 +122,7 @@ benchmark Benchmark.System.Process
     , directory         >= 1.2.2 && < 1.4
     -- Uses internal APIs
     , streamly          == 0.9.0.*
+    , streamly-core     == 0.1.0
 
   if flag(fusion-plugin) && !impl(ghc < 8.6)
     build-depends:
@@ -151,3 +153,4 @@ test-suite Test.System.Process
     , QuickCheck        >= 2.10  && < 2.15
     -- Uses internal APIs
     , streamly          == 0.9.0.*
+    , streamly-core     == 0.1.0

@@ -6,10 +6,4 @@ package streamly-process
 source-repository-package
    type: git
    location: https://github.com/composewell/streamly.git
-   tag: master
-
-source-repository-package
-  type: git
-  location: https://github.com/composewell/streamly.git
-  tag: master
-  subdir: core
+   tag: ac5a6f7302e384c6621bf037ab6bd5df6d2d97cf
