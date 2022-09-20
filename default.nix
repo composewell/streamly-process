@@ -5,7 +5,7 @@
 
 {
   nixpkgs ?
-    import (builtins.fetchTarball https://github.com/NixOS/nixpkgs/archive/refs/tags/21.11.tar.gz)
+    import (builtins.fetchTarball https://github.com/NixOS/nixpkgs/archive/refs/tags/22.05.tar.gz)
         {}
 , compiler ? "default"
 , c2nix ? "" # cabal2nix CLI options
@@ -47,7 +47,8 @@ let haskellPackages =
                         #  } {})
                         (let src = fetchGit {
                             url = "git@github.com:composewell/streamly.git";
-                            rev = "4bb8b7c950ffeee9d5c9c3ca23c65be93ca34f0b";
+                            rev = "8652f93e82194559494b498c270713a0e0d96463";
+                            allRefs = true;
                         }; in super.callCabal2nix "streamly" src {})
                         (old:
                           { librarySystemDepends =
@@ -62,7 +63,8 @@ let haskellPackages =
                       nixpkgs.haskell.lib.overrideCabal
                         (let src = fetchGit {
                             url = "git@github.com:composewell/streamly.git";
-                            rev = "4bb8b7c950ffeee9d5c9c3ca23c65be93ca34f0b";
+                            rev = "8652f93e82194559494b498c270713a0e0d96463";
+                            allRefs = true;
                         }; in super.callCabal2nix "streamly-core" "${src}/core" {})
                         (old:
                           { librarySystemDepends =
@@ -73,6 +75,13 @@ let haskellPackages =
                             doHaddock = false;
                           });
 
+                    lockfree-queue =
+                      super.callHackageDirect
+                        { pkg = "lockfree-queue";
+                          ver = "0.2.4";
+                          sha256 = "1bj9agy3x0yjbscpjgn96gpnj4lvkh39spjvy3jnrr3a42v3ynw7";
+                        } {};
+                        
                     unicode-data =
                       super.callHackageDirect
                         { pkg = "unicode-data";
