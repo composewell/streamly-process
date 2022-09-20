@@ -147,7 +147,7 @@ import qualified Streamly.Internal.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Data.Fold as Fold
 -- >>> import qualified Streamly.Internal.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
--- >>> import qualified Streamly.Internal.Data.Stream as Stream
+-- >>> import qualified Streamly.Internal.Data.Stream as S
 -- >>> import qualified Streamly.Internal.Unicode.Stream as Unicode
 
 -------------------------------------------------------------------------------
@@ -752,7 +752,7 @@ toStdout path args = do
 -}
 
 -- |
--- >>> toNull path args = toChunks path args & S.drain
+-- >>> toNull path args = toChunks path args & S.fold Fold.drain
 --
 {-# INLINE toNull #-}
 toNull ::
