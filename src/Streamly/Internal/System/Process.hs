@@ -126,7 +126,6 @@ import System.Process
 
 import qualified Streamly.Data.Array.Unboxed as Array
 import qualified Streamly.Data.Fold as Fold
-import qualified Streamly.Prelude as Stream
 
 -- Internal imports
 import Streamly.Internal.System.IO (defaultChunkSize)
@@ -135,7 +134,6 @@ import qualified Streamly.Internal.Console.Stdio as Stdio
 import qualified Streamly.Internal.Data.Array.Stream.Foreign
     as ArrayStream (arraysOf)
 import qualified Streamly.Internal.Data.Stream as S
-import qualified Streamly.Internal.Data.Stream.IsStream as Stream (bracket')
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (getChunks, putChunks)
@@ -147,10 +145,9 @@ import qualified Streamly.Internal.Unicode.Stream as Unicode
 -- >>> import Data.Function ((&))
 -- >>> import qualified Streamly.Internal.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Prelude as Stream
 -- >>> import qualified Streamly.Internal.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
--- >>> import qualified Streamly.Internal.Data.Stream.IsStream as Stream
+-- >>> import qualified Streamly.Internal.Data.Stream as Stream
 -- >>> import qualified Streamly.Internal.Unicode.Stream as Unicode
 
 -------------------------------------------------------------------------------
@@ -361,13 +358,13 @@ createProc' modCfg path args = do
 putChunksClose :: (MonadIO m) =>
     Handle -> S.Stream m (Array Word8) -> S.Stream m a
 putChunksClose h input =
-    Stream.before
+    S.before
         (Handle.putChunks h (adapt input) >> liftIO (hClose h))
-        Stream.nil
+        S.nil
 
 {-# INLINE toChunksClose #-}
 toChunksClose :: (MonadAsync m) => Handle -> S.Stream m (Array Word8)
-toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.getChunks h)
+toChunksClose h = S.after (liftIO $ hClose h) (Handle.getChunks h)
 
 {-# INLINE pipeChunksWithAction #-}
 pipeChunksWithAction ::
@@ -378,7 +375,7 @@ pipeChunksWithAction ::
     -> [String]             -- ^ Arguments
     -> S.Stream m a     -- ^ Output stream
 pipeChunksWithAction run modCfg path args =
-    Stream.bracket'
+    S.bracket'
           alloc cleanupNormal cleanupException cleanupException run
 
     where
@@ -400,8 +397,8 @@ pipeChunks'With modifier path args input =
 
     run (Just stdinH, Just stdoutH, Just stderrH, _) =
         putChunksClose stdinH input
-            `parallel` Stream.map Left (toChunksClose stderrH)
-            `parallel` Stream.map Right (toChunksClose stdoutH)
+            `parallel` fmap Left (toChunksClose stderrH)
+            `parallel` fmap Right (toChunksClose stdoutH)
     run _ = error "pipeChunks'With: Not reachable"
 
 {-# INLINE pipeChunks' #-}
@@ -424,11 +421,11 @@ pipeChunks' = pipeChunks'With id
 -- world" | tr [:lower:] [:upper:]@:
 --
 -- >>> :{
---    pipeBytes' "echo" ["hello world"] Stream.nil
---  & Stream.rights
+--    pipeBytes' "echo" ["hello world"] S.nil
+--  & S.rights
 --  & pipeBytes' "tr" ["[:lower:]", "[:upper:]"]
---  & Stream.rights
---  & Stream.fold Stdio.write
+--  & S.rights
+--  & S.fold Stdio.write
 --  :}
 --HELLO WORLD
 --
@@ -443,7 +440,7 @@ pipeBytes' ::
 pipeBytes' path args input =
     let input1 = ArrayStream.arraysOf defaultChunkSize input
         output = pipeChunks' path args input1
-     in Stream.unfoldMany (Unfold.either Array.read) output
+     in S.unfoldMany (Unfold.either Array.read) output
 
 {-# INLINE pipeChunksWith #-}
 pipeChunksWith ::
@@ -482,7 +479,7 @@ pipeChunksWith modifier path args input =
 -- >>> :{
 --    Process.toChunks "echo" ["hello world"]
 --  & Process.pipeChunks "tr" ["[a-z]", "[A-Z]"]
---  & Stream.fold Stdio.writeChunks
+--  & S.fold Stdio.writeChunks
 --  :}
 --HELLO WORLD
 --
@@ -514,7 +511,7 @@ processChunks = pipeChunks
 -- >>> :{
 --    Process.toBytes "echo" ["hello world"]
 --  & Process.pipeBytes "tr" ["[a-z]", "[A-Z]"]
---  & Stream.fold Stdio.write
+--  & S.fold Stdio.write
 --  :}
 --HELLO WORLD
 --
@@ -529,7 +526,7 @@ pipeBytes ::
 pipeBytes path args input = -- rights . pipeBytes' path args
     let input1 = ArrayStream.arraysOf defaultChunkSize input
         output = pipeChunks path args input1
-     in Stream.unfoldMany Array.read output
+     in S.unfoldMany Array.read output
 
 {-# DEPRECATED processBytes "Please use pipeBytes instead." #-}
 {-# INLINE processBytes #-}
@@ -556,7 +553,7 @@ processBytes = pipeBytes
 --
 -- >>> :{
 --    Process.toChars "echo" ["hello world"]
---  & Stream.map toUpper
+--  & S.map toUpper
 --  & Stdio.putChars
 --  :}
 --HELLO WORLD
@@ -591,8 +588,8 @@ toChunks'With modifier path args =
     where
 
     run (_, Just stdoutH, Just stderrH, _) =
-        Stream.map Left (toChunksClose stderrH)
-            `parallel` Stream.map Right (toChunksClose stdoutH)
+        fmap Left (toChunksClose stderrH)
+            `parallel` fmap Right (toChunksClose stdoutH)
     run _ = error "toChunks'With: Not reachable"
 
 {-# INLINE toChunksWith #-}
@@ -622,7 +619,7 @@ toChunksWith modifier path args =
 --
 -- >>> :{
 --   Process.toBytes' "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
--- & Stream.fold (Fold.partition Stdio.writeErr Stdio.write)
+-- & S.fold (Fold.partition Stdio.writeErr Stdio.write)
 -- :}
 -- world
 -- hello
@@ -637,14 +634,14 @@ toBytes' ::
     -> S.Stream m (Either Word8 Word8)    -- ^ Output Stream
 toBytes' path args =
     let output = toChunks' path args
-     in Stream.unfoldMany (Unfold.either Array.read) output
+     in S.unfoldMany (Unfold.either Array.read) output
 
 -- | The following code is equivalent to the shell command @echo "hello
 -- world"@:
 --
 -- >>> :{
 --    Process.toBytes "echo" ["hello world"]
---  & Stream.fold Stdio.write
+--  & S.fold Stdio.write
 --  :}
 --hello world
 --
@@ -657,14 +654,14 @@ toBytes ::
     -> S.Stream m Word8    -- ^ Output Stream
 toBytes path args =
     let output = toChunks path args
-     in Stream.unfoldMany Array.read output
+     in S.unfoldMany Array.read output
 
 -- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
 -- of @Word8@.
 --
 -- >>> :{
 --   toChunks' "bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
--- & Stream.fold (Fold.partition Stdio.writeErrChunks Stdio.writeChunks)
+-- & S.fold (Fold.partition Stdio.writeErrChunks Stdio.writeChunks)
 -- :}
 -- world
 -- hello
@@ -688,7 +685,7 @@ toChunks' = toChunks'With id
 --
 -- >>> :{
 --    Process.toChunks "echo" ["hello world"]
---  & Stream.fold Stdio.writeChunks
+--  & S.fold Stdio.writeChunks
 --  :}
 --hello world
 --
@@ -727,7 +724,7 @@ toLines ::
 toLines f path args = toChars path args & Unicode.lines f
 
 -- |
--- >>> toString path args = toChars path args & Stream.fold Fold.toList
+-- >>> toString path args = toChars path args & S.fold Fold.toList
 --
 {-# INLINE toString #-}
 toString ::
@@ -735,7 +732,7 @@ toString ::
     => FilePath -- ^ Executable name or path
     -> [String] -- ^ Arguments
     -> m String
-toString path args = toChars path args & Stream.fold Fold.toList
+toString path args = toChars path args & S.fold Fold.toList
 
 -- |
 -- >>> toStdout path args = toChunks path args & Stdio.putChunks
@@ -755,7 +752,7 @@ toStdout path args = do
 -}
 
 -- |
--- >>> toNull path args = toChunks path args & Stream.drain
+-- >>> toNull path args = toChunks path args & S.drain
 --
 {-# INLINE toNull #-}
 toNull ::
@@ -763,4 +760,4 @@ toNull ::
     => FilePath -- ^ Executable name or path
     -> [String] -- ^ Arguments
     -> m ()
-toNull path args = toChunks path args & Stream.drain
+toNull path args = toChunks path args & S.fold Fold.drain
