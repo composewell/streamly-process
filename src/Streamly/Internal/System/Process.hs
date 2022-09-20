@@ -145,7 +145,6 @@ import qualified Streamly.Internal.Unicode.Stream as Unicode
 -- >>> import Data.Function ((&))
 -- >>> import qualified Streamly.Internal.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Prelude as S
 -- >>> import qualified Streamly.Internal.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.Data.Stream as S
@@ -554,7 +553,7 @@ processBytes = pipeBytes
 --
 -- >>> :{
 --    Process.toChars "echo" ["hello world"]
---  & S.map toUpper
+--  & fmap toUpper
 --  & Stdio.putChars
 --  :}
 --HELLO WORLD
