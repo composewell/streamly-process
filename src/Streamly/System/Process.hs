@@ -26,14 +26,15 @@
 -- >>> :set -XScopedTypeVariables
 -- >>> import Data.Char (toUpper)
 -- >>> import Data.Function ((&))
+-- >>> import Streamly.Prelude (async)
 -- >>> import qualified Streamly.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Array.Unboxed as Array
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Prelude as Stream
+-- >>> import qualified Streamly.Data.Stream as Stream
 -- >>> import qualified Streamly.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
--- >>> import qualified Streamly.Internal.Data.Stream.IsStream as Stream
+-- >>> import qualified Streamly.Internal.Data.Stream as Stream
 --
 -- = Executables as functions
 --
@@ -53,7 +54,7 @@
 --
 -- >>> :{
 --    Process.toBytes "echo" ["hello world"]
---  & Unicode.decodeLatin1 & Stream.map toUpper & Unicode.encodeLatin1
+--  & Unicode.decodeLatin1 & fmap toUpper & Unicode.encodeLatin1
 --  & Stream.fold Stdio.write
 --  :}
 --  HELLO WORLD
@@ -79,13 +80,13 @@
 -- grep file =
 --    Process.toBytes "grep" ["-H", "to", file]
 --  & Stream.handle (\(_ :: Process.ProcessFailure) -> Stream.nil)
---  & Stream.splitWithSuffix (== 10) Array.write
+--  & Stream.foldMany (Fold.takeEndBy (== 10) Array.write)
 --  :}
 --
 -- >>> :{
 -- pgrep =
 --    Dir.toFiles "."
---  & Stream.concatMapWith Stream.async grep
+--  & Stream.concatMapWith async grep
 --  & Stream.fold Stdio.writeChunks
 -- :}
 --
@@ -136,8 +137,8 @@ import Streamly.Internal.System.Process
 -- >>> import qualified Streamly.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Array.Unboxed as Array
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Prelude as Stream
+-- >>> import qualified Streamly.Data.Stream as Stream
 -- >>> import qualified Streamly.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
--- >>> import qualified Streamly.Internal.Data.Stream.IsStream as Stream
+-- >>> import qualified Streamly.Internal.Data.Stream as Stream

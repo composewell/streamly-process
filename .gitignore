@@ -2,6 +2,7 @@
 /.stack-work/
 /dist/
 /dist-newstyle/
+.cabal.nix/
 
 # Local GHC and Cabal related files
 .ghc.environment*

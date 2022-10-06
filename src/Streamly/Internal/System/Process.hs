@@ -93,18 +93,23 @@ module Streamly.Internal.System.Process
     )
 where
 
+import Control.Concurrent (forkIO)
 import Control.Exception (Exception(..), catch, throwIO)
 import Control.Monad (void, unless)
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Concurrent (forkIO)
 import Data.Function ((&))
 import Data.Word (Word8)
 import Foreign.C.Error (Errno(..), ePIPE)
 import GHC.IO.Exception (IOException(..), IOErrorType(..))
 import Streamly.Data.Array.Unboxed (Array)
 import Streamly.Data.Fold (Fold)
-import Streamly.Prelude (MonadAsync, parallel, IsStream, adapt, SerialT)
+import Streamly.Data.Stream (Stream)
+import Streamly.Data.Stream.Concurrent (MonadAsync)
+
+-- XXX This should be removed and replaced by the new Stream modules
+import Streamly.Prelude (parallel)
+
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
 
@@ -126,15 +131,15 @@ import System.Process
 
 import qualified Streamly.Data.Array.Unboxed as Array
 import qualified Streamly.Data.Fold as Fold
-import qualified Streamly.Prelude as Stream
+import qualified Streamly.Data.Stream as Stream
 
 -- Internal imports
 import Streamly.Internal.System.IO (defaultChunkSize)
 
 import qualified Streamly.Internal.Console.Stdio as Stdio
-import qualified Streamly.Internal.Data.Array.Stream.Foreign
+import qualified Streamly.Internal.Data.Array.Unboxed.Stream
     as ArrayStream (arraysOf)
-import qualified Streamly.Internal.Data.Stream.IsStream as Stream (bracket')
+import qualified Streamly.Internal.Data.Stream as Stream (bracket')
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (getChunks, putChunks)
@@ -146,10 +151,10 @@ import qualified Streamly.Internal.Unicode.Stream as Unicode
 -- >>> import Data.Function ((&))
 -- >>> import qualified Streamly.Internal.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Prelude as Stream
+-- >>> import qualified Streamly.Data.Stream as Stream
 -- >>> import qualified Streamly.Internal.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
--- >>> import qualified Streamly.Internal.Data.Stream.IsStream as Stream
+-- >>> import qualified Streamly.Internal.Data.Stream as Stream
 -- >>> import qualified Streamly.Internal.Unicode.Stream as Unicode
 
 -------------------------------------------------------------------------------
@@ -357,25 +362,25 @@ createProc' modCfg path args = do
     Config cfg = modCfg $ mkConfig path args
 
 {-# INLINE putChunksClose #-}
-putChunksClose :: (MonadIO m, IsStream t) =>
-    Handle -> t m (Array Word8) -> t m a
+putChunksClose :: MonadIO m =>
+    Handle -> Stream m (Array Word8) -> Stream m a
 putChunksClose h input =
     Stream.before
-        (Handle.putChunks h (adapt input) >> liftIO (hClose h))
+        (Handle.putChunks h input >> liftIO (hClose h))
         Stream.nil
 
 {-# INLINE toChunksClose #-}
-toChunksClose :: (IsStream t, MonadAsync m) => Handle -> t m (Array Word8)
+toChunksClose :: MonadAsync m => Handle -> Stream m (Array Word8)
 toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.getChunks h)
 
 {-# INLINE pipeChunksWithAction #-}
 pipeChunksWithAction ::
-    (IsStream t, MonadCatch m, MonadAsync m)
-    => ((Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> t m a)
+    (MonadCatch m, MonadAsync m)
+    => ((Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> Stream m a)
     -> (Config -> Config)
     -> FilePath             -- ^ Path to Executable
     -> [String]             -- ^ Arguments
-    -> t m a     -- ^ Output stream
+    -> Stream m a     -- ^ Output stream
 pipeChunksWithAction run modCfg path args =
     Stream.bracket'
           alloc cleanupNormal cleanupException cleanupException run
@@ -386,12 +391,12 @@ pipeChunksWithAction run modCfg path args =
 
 {-# INLINE pipeChunks'With #-}
 pipeChunks'With ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
     -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
-    -> t m (Array Word8)    -- ^ Input stream
-    -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
+    -> Stream m (Array Word8)    -- ^ Input stream
+    -> Stream m (Either (Array Word8) (Array Word8))     -- ^ Output stream
 pipeChunks'With modifier path args input =
     pipeChunksWithAction run (modifier . pipeStdErr) path args
 
@@ -399,17 +404,17 @@ pipeChunks'With modifier path args input =
 
     run (Just stdinH, Just stdoutH, Just stderrH, _) =
         putChunksClose stdinH input
-            `parallel` Stream.map Left (toChunksClose stderrH)
-            `parallel` Stream.map Right (toChunksClose stdoutH)
+            `parallel` fmap Left (toChunksClose stderrH)
+            `parallel` fmap Right (toChunksClose stdoutH)
     run _ = error "pipeChunks'With: Not reachable"
 
 {-# INLINE pipeChunks' #-}
 pipeChunks' ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
-    -> t m (Array Word8)    -- ^ Input stream
-    -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
+    -> Stream m (Array Word8)    -- ^ Input stream
+    -> Stream m (Either (Array Word8) (Array Word8))     -- ^ Output stream
 pipeChunks' = pipeChunks'With id
 
 -- | @pipeBytes' path args input@ runs the executable at @path@ using @args@
@@ -434,11 +439,11 @@ pipeChunks' = pipeChunks'With id
 -- @since 0.1.0
 {-# INLINE pipeBytes' #-}
 pipeBytes' ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => FilePath         -- ^ Executable name or path
     -> [String]         -- ^ Arguments
-    -> t m Word8        -- ^ Input Stream
-    -> t m (Either Word8 Word8) -- ^ Output Stream
+    -> Stream m Word8        -- ^ Input Stream
+    -> Stream m (Either Word8 Word8) -- ^ Output Stream
 pipeBytes' path args input =
     let input1 = ArrayStream.arraysOf defaultChunkSize input
         output = pipeChunks' path args input1
@@ -446,12 +451,12 @@ pipeBytes' path args input =
 
 {-# INLINE pipeChunksWith #-}
 pipeChunksWith ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
     -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
-    -> t m (Array Word8)    -- ^ Input stream
-    -> t m (Array Word8)    -- ^ Output stream
+    -> Stream m (Array Word8)    -- ^ Input stream
+    -> Stream m (Array Word8)    -- ^ Output stream
 pipeChunksWith modifier path args input =
     pipeChunksWithAction run modifier path args
 
@@ -488,21 +493,21 @@ pipeChunksWith modifier path args input =
 -- /pre-release/
 {-# INLINE pipeChunks #-}
 pipeChunks ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
-    -> t m (Array Word8)    -- ^ Input stream
-    -> t m (Array Word8)    -- ^ Output stream
+    -> Stream m (Array Word8)    -- ^ Input stream
+    -> Stream m (Array Word8)    -- ^ Output stream
 pipeChunks = pipeChunksWith id
 
 {-# DEPRECATED processChunks "Please use pipeChunks instead." #-}
 {-# INLINE processChunks #-}
 processChunks ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
-    -> t m (Array Word8)    -- ^ Input stream
-    -> t m (Array Word8)    -- ^ Output stream
+    -> Stream m (Array Word8)    -- ^ Input stream
+    -> Stream m (Array Word8)    -- ^ Output stream
 processChunks = pipeChunks
 
 -- | Like 'pipeChunks' except that it works on a stream of bytes instead of
@@ -520,11 +525,11 @@ processChunks = pipeChunks
 -- /pre-release/
 {-# INLINE pipeBytes #-}
 pipeBytes ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
-    -> t m Word8    -- ^ Input Stream
-    -> t m Word8    -- ^ Output Stream
+    -> Stream m Word8    -- ^ Input Stream
+    -> Stream m Word8    -- ^ Output Stream
 pipeBytes path args input = -- rights . pipeBytes' path args
     let input1 = ArrayStream.arraysOf defaultChunkSize input
         output = pipeChunks path args input1
@@ -533,11 +538,11 @@ pipeBytes path args input = -- rights . pipeBytes' path args
 {-# DEPRECATED processBytes "Please use pipeBytes instead." #-}
 {-# INLINE processBytes #-}
 processBytes ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
-    -> t m Word8    -- ^ Input Stream
-    -> t m Word8    -- ^ Output Stream
+    -> Stream m Word8    -- ^ Input Stream
+    -> Stream m Word8    -- ^ Output Stream
 processBytes = pipeBytes
 
 -- | Like 'pipeChunks' except that it works on a stream of chars instead of
@@ -555,7 +560,7 @@ processBytes = pipeBytes
 --
 -- >>> :{
 --    Process.toChars "echo" ["hello world"]
---  & Stream.map toUpper
+--  & fmap toUpper
 --  & Stdio.putChars
 --  :}
 --HELLO WORLD
@@ -566,8 +571,8 @@ pipeChars ::
     (MonadCatch m, MonadAsync m)
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
-    -> SerialT m Char    -- ^ Input Stream
-    -> SerialT m Char    -- ^ Output Stream
+    -> Stream m Char    -- ^ Input Stream
+    -> Stream m Char    -- ^ Output Stream
 pipeChars path args input =
     Unicode.encodeUtf8 input
         & pipeBytes path args
@@ -579,28 +584,28 @@ pipeChars path args input =
 
 {-# INLINE toChunks'With #-}
 toChunks'With ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
     -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
-    -> t m (Either (Array Word8) (Array Word8))     -- ^ Output stream
+    -> Stream m (Either (Array Word8) (Array Word8))     -- ^ Output stream
 toChunks'With modifier path args =
     pipeChunksWithAction run (modifier . inheritStdin . pipeStdErr) path args
 
     where
 
     run (_, Just stdoutH, Just stderrH, _) =
-        Stream.map Left (toChunksClose stderrH)
-            `parallel` Stream.map Right (toChunksClose stdoutH)
+        fmap Left (toChunksClose stderrH)
+            `parallel` fmap Right (toChunksClose stdoutH)
     run _ = error "toChunks'With: Not reachable"
 
 {-# INLINE toChunksWith #-}
 toChunksWith ::
-    (IsStream t, MonadCatch m, MonadAsync m)
+    (MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
     -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
-    -> t m (Array Word8)    -- ^ Output stream
+    -> Stream m (Array Word8)    -- ^ Output stream
 toChunksWith modifier path args =
     pipeChunksWithAction run (modifier . inheritStdin) path args
 
@@ -630,10 +635,10 @@ toChunksWith modifier path args =
 -- @since 0.1.0
 {-# INLINE toBytes' #-}
 toBytes' ::
-    (IsStream t, MonadAsync m, MonadCatch m)
+    (MonadAsync m, MonadCatch m)
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
-    -> t m (Either Word8 Word8)    -- ^ Output Stream
+    -> Stream m (Either Word8 Word8)    -- ^ Output Stream
 toBytes' path args =
     let output = toChunks' path args
      in Stream.unfoldMany (Unfold.either Array.read) output
@@ -650,10 +655,10 @@ toBytes' path args =
 -- @since 0.1.0
 {-# INLINE toBytes #-}
 toBytes ::
-    (IsStream t, MonadAsync m, MonadCatch m)
+    (MonadAsync m, MonadCatch m)
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
-    -> t m Word8    -- ^ Output Stream
+    -> Stream m Word8    -- ^ Output Stream
 toBytes path args =
     let output = toChunks path args
      in Stream.unfoldMany Array.read output
@@ -676,10 +681,10 @@ toBytes path args =
 -- /Pre-release/
 {-# INLINE toChunks' #-}
 toChunks' ::
-    (IsStream t, MonadAsync m, MonadCatch m)
+    (MonadAsync m, MonadCatch m)
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
-    -> t m (Either (Array Word8) (Array Word8))    -- ^ Output Stream
+    -> Stream m (Either (Array Word8) (Array Word8))    -- ^ Output Stream
 toChunks' = toChunks'With id
 
 -- | The following code is equivalent to the shell command @echo "hello
@@ -696,10 +701,10 @@ toChunks' = toChunks'With id
 -- @since 0.1.0
 {-# INLINE toChunks #-}
 toChunks ::
-    (IsStream t, MonadAsync m, MonadCatch m)
+    (MonadAsync m, MonadCatch m)
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
-    -> t m (Array Word8)    -- ^ Output Stream
+    -> Stream m (Array Word8)    -- ^ Output Stream
 toChunks = toChunksWith id
 
 -- |
@@ -710,7 +715,7 @@ toChars ::
     (MonadAsync m, MonadCatch m)
     => FilePath       -- ^ Executable name or path
     -> [String]       -- ^ Arguments
-    -> SerialT m Char -- ^ Output Stream
+    -> Stream m Char -- ^ Output Stream
 toChars path args = toBytes path args & Unicode.decodeUtf8
 
 -- |
@@ -722,7 +727,7 @@ toLines ::
     => Fold m Char a
     -> FilePath       -- ^ Executable name or path
     -> [String]       -- ^ Arguments
-    -> SerialT m a -- ^ Output Stream
+    -> Stream m a -- ^ Output Stream
 toLines f path args = toChars path args & Unicode.lines f
 
 -- |
@@ -754,7 +759,7 @@ toStdout path args = do
 -}
 
 -- |
--- >>> toNull path args = toChunks path args & Stream.drain
+-- >>> toNull path args = toChunks path args & Stream.fold Fold.drain
 --
 {-# INLINE toNull #-}
 toNull ::
@@ -762,4 +767,4 @@ toNull ::
     => FilePath -- ^ Executable name or path
     -> [String] -- ^ Arguments
     -> m ()
-toNull path args = toChunks path args & Stream.drain
+toNull path args = toChunks path args & Stream.fold Fold.drain
