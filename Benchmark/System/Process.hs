@@ -13,10 +13,11 @@ import System.IO
     , openFile
     , hClose
     )
+import Streamly.Data.Stream (Stream)
 
 import qualified Streamly.Data.Fold as FL
 import qualified Streamly.FileSystem.Handle as FH
-import qualified Streamly.Prelude as S
+import qualified Streamly.Data.Stream as S
 import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.System.Command as Cmd
 
@@ -27,11 +28,11 @@ import qualified Streamly.Internal.System.Process as Proc
 
 -- XXX replace with streamly versions once they are fixed
 {-# INLINE rights #-}
-rights :: (S.IsStream t, Monad m, Functor (t m)) => t m (Either a b) -> t m b
+rights :: Monad m => Stream m (Either a b) -> Stream m b
 rights = fmap (fromRight undefined) . S.filter isRight
 
 {-# INLINE lefts #-}
-lefts :: (S.IsStream t, Monad m, Functor (t m)) => t m (Either a b) -> t m a
+lefts :: Monad m => Stream m (Either a b) -> Stream m a
 lefts = fmap (fromLeft undefined) . S.filter isLeft
 
 -------------------------------------------------------------------------------

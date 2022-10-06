@@ -26,13 +26,13 @@ import Test.QuickCheck
 import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
 
 import qualified Streamly.Data.Fold as Fold
-import qualified Streamly.Prelude as S
+import qualified Streamly.Data.Stream as S
 import qualified Streamly.System.Process as Proc
 
 -- Internal imports
-import qualified Streamly.Internal.Data.Array.Stream.Foreign as AS
+import qualified Streamly.Internal.Data.Array.Unboxed.Stream as AS
     (arraysOf, concat)
-import qualified Streamly.Internal.Data.Stream.IsStream as S
+import qualified Streamly.Internal.Data.Stream as S
     (nilM, lefts, rights)
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, getBytes)
 import qualified Streamly.Internal.System.Process as Proc
@@ -153,8 +153,8 @@ toBytes1 =
 
             run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
-            genList <- run $ S.toList genStrm
-            byteList <- run $ S.toList byteStrm
+            genList <- run $ S.fold Fold.toList genStrm
+            byteList <- run $ S.fold Fold.toList byteStrm
             run $ removeFile charFile
             listEquals (==) genList byteList
 
@@ -163,7 +163,7 @@ toBytes2 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $
+        S.fold Fold.drain $
              Proc.toBytes' interpreterFile [interpreterArg, executableFileFail]
         return False
 
@@ -187,8 +187,8 @@ toChunks1 =
 
             run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
-            genList <- run $ S.toList (AS.concat genStrm)
-            byteList <- run $ S.toList byteStrm
+            genList <- run $ S.fold Fold.toList (AS.concat genStrm)
+            byteList <- run $ S.fold Fold.toList byteStrm
             run $ removeFile charFile
             listEquals (==) genList byteList
 
@@ -197,7 +197,7 @@ toChunks2 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $
+        S.fold Fold.drain $
              Proc.toChunks' interpreterFile [interpreterArg, executableFileFail]
         return False
 
@@ -217,10 +217,10 @@ pipeBytes1 =
                             trBinary
                             ["[a-z]", "[A-Z]"]
                             inputStream
-                charUpperStrm = S.map toUpper inputStream
+                charUpperStrm = fmap toUpper inputStream
 
-            genList <- run $ S.toList genStrm
-            charList <- run $ S.toList charUpperStrm
+            genList <- run $ S.fold Fold.toList genStrm
+            charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
 pipeBytes2 :: Property
@@ -228,7 +228,7 @@ pipeBytes2 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $
+        S.fold Fold.drain $
            Proc.pipeBytes
                interpreterFile [interpreterArg, executableFileFail] S.nil
         return False
@@ -243,7 +243,7 @@ pipeBytes3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $
+        S.fold Fold.drain $
             Proc.pipeBytes
             interpreterFile
             [interpreterArg, executableFilePass]
@@ -270,10 +270,10 @@ processChunksConsumeAllInput =
                     ["[a-z]", "[A-Z]"]
                     (AS.arraysOf arrayChunkSize inputStream)
 
-                charUpperStrm = S.map toUpper inputStream
+                charUpperStrm = fmap toUpper inputStream
 
-            genList <- run $ S.toList genStrm
-            charList <- run $ S.toList charUpperStrm
+            genList <- run $ S.fold Fold.toList genStrm
+            charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
 processChunksConsumePartialInput :: Property
@@ -291,10 +291,12 @@ processChunksConsumePartialInput =
                     (AS.arraysOf arrayChunkSize inputStream)
 
                 headLine =
-                      S.splitWithSuffix (== 10) Fold.toList inputStream
-                    & S.head
+                      S.foldMany
+                          (Fold.takeEndBy (== 10) Fold.toList)
+                          inputStream
+                    & S.fold Fold.one
 
-            procList <- run $ S.toList procOutput
+            procList <- run $ S.fold Fold.toList procOutput
             expectedList <- run $ fmap (fromMaybe []) headLine
             listEquals (==) procList expectedList
 
@@ -304,7 +306,7 @@ processChunksProcessFailure = monadicIO $ run $ catch runProcess checkExitCode
     where
 
     runProcess = do
-        S.drain $
+        S.fold Fold.drain $
             Proc.pipeChunks
                 interpreterFile [interpreterArg, executableFileFail] S.nil
         return False
@@ -317,7 +319,7 @@ processChunksInputFailure = monadicIO $ run $ catch runProcess checkException
     where
 
     runProcess = do
-        S.drain $
+        S.fold Fold.drain $
             Proc.pipeChunks
             interpreterFile
             [interpreterArg, executableFilePass]
@@ -337,10 +339,10 @@ pipeBytes'1 =
                             trBinary
                             ["[a-z]", "[A-Z]"]
                             inputStream
-                charUpperStrm = S.map toUpper inputStream
+                charUpperStrm = fmap toUpper inputStream
 
-            genList <- run $ S.toList genStrm
-            charList <- run $ S.toList charUpperStrm
+            genList <- run $ S.fold Fold.toList genStrm
+            charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
 pipeBytes'2 :: Property
@@ -355,10 +357,10 @@ pipeBytes'2 =
                     [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
                     inputStream
 
-                charUpperStrm = S.map toUpper inputStream
+                charUpperStrm = fmap toUpper inputStream
 
-            genList <- run $ S.toList outStream
-            charList <- run $ S.toList charUpperStrm
+            genList <- run $ S.fold Fold.toList outStream
+            charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
 pipeBytes'3 :: Property
@@ -366,7 +368,7 @@ pipeBytes'3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $
+        S.fold Fold.drain $
             Proc.pipeBytes'
                 interpreterFile [interpreterArg, executableFileFail] S.nil
         return False
@@ -381,7 +383,7 @@ pipeBytes'4 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $
+        S.fold Fold.drain $
             Proc.pipeBytes'
             interpreterFile
             [interpreterArg, executableFilePass]
@@ -407,10 +409,10 @@ pipeChunks'1 =
                     ["[a-z]", "[A-Z]"]
                     (AS.arraysOf arrayChunkSize inputStream)
 
-                charUpperStrm = S.map toUpper inputStream
+                charUpperStrm = fmap toUpper inputStream
 
-            genList <- run $ S.toList genStrm
-            charList <- run $ S.toList charUpperStrm
+            genList <- run $ S.fold Fold.toList genStrm
+            charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
 pipeChunks'2 :: Property
@@ -425,10 +427,10 @@ pipeChunks'2 =
                     [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
                     (AS.arraysOf arrayChunkSize inputStream)
 
-                charUpperStrm = S.map toUpper inputStream
+                charUpperStrm = fmap toUpper inputStream
 
-            genList <- run $ S.toList outStream
-            charList <- run $ S.toList charUpperStrm
+            genList <- run $ S.fold Fold.toList outStream
+            charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
 pipeChunks'3 :: Property
@@ -436,7 +438,7 @@ pipeChunks'3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $ Proc.pipeChunks'
+        S.fold Fold.drain $ Proc.pipeChunks'
             interpreterFile  [interpreterArg, executableFileFail] S.nil
         return False
 
@@ -450,7 +452,7 @@ pipeChunks'4 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.drain $
+        S.fold Fold.drain $
             Proc.pipeChunks'
             interpreterFile
             [interpreterArg, executableFilePass]

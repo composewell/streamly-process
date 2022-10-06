@@ -1,131 +1,53 @@
 # CAUTION! a spelling mistake in arg string is ignored silently.
 #
-# To use ghc-8.6.5
-# nix-shell --argstr compiler "ghc865"
+# To use ghc-8.10.7
+# nix-shell --argstr compiler "ghc8107"
 
 {
   nixpkgs ?
-    import (builtins.fetchTarball https://github.com/NixOS/nixpkgs/archive/refs/tags/21.11.tar.gz)
+    import (builtins.fetchTarball
+      https://github.com/NixOS/nixpkgs/archive/refs/tags/22.05.tar.gz)
         {}
-, compiler ? "default"
-, c2nix ? "" # cabal2nix CLI options
-# TODO
-#, sources ? [] # e.g. [./. ./benchmark]
-#, hdeps ? [] # e.g. [time, mtl]
-#, deps ? [] # e.g. [SDL2]
+, compiler ? "ghc922"
 }:
-let haskellPackages =
-        if compiler == "default"
-        then nixpkgs.haskellPackages
-        else nixpkgs.haskell.packages.${compiler};
+let
+    utils =
+      let src = fetchGit {
+            url = "git@github.com:composewell/composewell-haskell.git";
+            ref = "master";
+          }; in (import "${src}/utils.nix") { inherit nixpkgs; };
 
-    # we can possibly avoid adding our package to HaskellPackages like
-    # in the case of nix-shell for a single package?
-    mkPackage = super: pkg: path: opts: inShell:
-                let orig = super.callCabal2nixWithOptions pkg path opts {};
-                 in if inShell
-                    # Avoid copying the source directory to nix store by using
-                    # src = null.
-                    then orig.overrideAttrs (oldAttrs: { src = null; })
-                    else orig;
 
-    flags = "--benchmark --flag fusion-plugin" + " " + c2nix;
+    haskellPackages =
+      let src = fetchGit {
+            url = "git@github.com:composewell/composewell-haskell.git";
+            ref = "master";
+          }; in (import "${src}/haskellPackages.nix")
+            { inherit nixpkgs;
+              inherit compiler; };
 
     mkHaskellPackages = inShell:
-        haskellPackages.override {
-            overrides = self: super:
-                with nixpkgs.haskell.lib;
-                {
-                    streamly-process = mkPackage super "streamly-process" ./. flags inShell;
+      haskellPackages.override (old: {
+        overrides =
+          nixpkgs.lib.composeExtensions
+            (old.overrides or (_: _: {}))
+            (with nixpkgs.haskell.lib; self: super: {
+                streamly-process =
+                  utils.local super "streamly-process" ./. "--benchmark" inShell;
+                  streamly = utils.composewell super
+                      "streamly"
+                      "e061109f76ef37a288de0cafa37ea950c467cb82";
+                  streamly-core = utils.composewellDir super
+                      "streamly"
+                      "e061109f76ef37a288de0cafa37ea950c467cb82"
+                      "/core";
+            });
+      });
 
-                    streamly =
-                      nixpkgs.haskell.lib.overrideCabal
-                        #(super.callHackageDirect
-                        #  { pkg = "streamly";
-                        #    ver = "0.8.2";
-                        #    sha256 = "sha256-CjFq9SCdbgLZa7NqOE4OtC8OaFg4vK8VmIDjGU5rGko=";
-                        #  } {})
-                        (let src = fetchGit {
-                            url = "git@github.com:composewell/streamly.git";
-                            rev = "4bb8b7c950ffeee9d5c9c3ca23c65be93ca34f0b";
-                        }; in super.callCabal2nix "streamly" src {})
-                        (old:
-                          { librarySystemDepends =
-                              if builtins.currentSystem == "x86_64-darwin"
-                              then [nixpkgs.darwin.apple_sdk.frameworks.Cocoa]
-                              else [];
-                            enableLibraryProfiling = false;
-                            doHaddock = false;
-                          });
+    shellDrv = mkHaskellPackages true;
 
-                    streamly-core =
-                      nixpkgs.haskell.lib.overrideCabal
-                        (let src = fetchGit {
-                            url = "git@github.com:composewell/streamly.git";
-                            rev = "4bb8b7c950ffeee9d5c9c3ca23c65be93ca34f0b";
-                        }; in super.callCabal2nix "streamly-core" "${src}/core" {})
-                        (old:
-                          { librarySystemDepends =
-                              if builtins.currentSystem == "x86_64-darwin"
-                              then [nixpkgs.darwin.apple_sdk.frameworks.Cocoa]
-                              else [];
-                            enableLibraryProfiling = false;
-                            doHaddock = false;
-                          });
+    shell = utils.mkShell shellDrv (p: [p.streamly-process]) true;
 
-                    unicode-data =
-                      super.callHackageDirect
-                        { pkg = "unicode-data";
-                          ver = "0.3.0";
-                          sha256 = "sha256-3R8ZmLoN/oWU0Mr/V4o/90NqiWaE8fprVULgh8/s/Uc=";
-                        } {};
-
-                    tasty-bench =
-                      super.callHackageDirect
-                        { pkg = "tasty-bench";
-                          ver = "0.3";
-                          sha256 = "0na1q52zr8p1zz8hby4242yjr2zma3js4n91avl7ibsa2y51vrc4";
-                        } {};
-                };
-        };
-
-    drv = mkHaskellPackages true;
-
-    # A fake package to add some additional deps to the shell env
-    additionalDeps = drv.mkDerivation rec {
-              version = "0.1";
-              pname   = "streamly-process-additional";
-              license = "BSD-3-Clause";
-
-              setupHaskellDepends = with drv; [
-                cabal-doctest
-              ];
-              executableFrameworkDepends = with drv;
-                # XXX On macOS cabal2nix does not seem to generate a
-                # dependency on Cocoa framework.
-                if builtins.currentSystem == "x86_64-darwin"
-                then [nixpkgs.darwin.apple_sdk.frameworks.Cocoa]
-                else [];
-              executableHaskellDepends = with drv; [
-                unicode-data
-              ];
-            };
-
-    shell = drv.shellFor {
-        packages = p:
-          [ p.streamly-process
-            additionalDeps
-          ];
-        doBenchmark = true;
-        # Use a better prompt
-        shellHook = ''
-          export CABAL_DIR="$(pwd)/.cabal.nix"
-          if test -n "$PS_SHELL"
-          then
-            export PS1="$PS_SHELL\[$bldred\](nix)\[$txtrst\] "
-          fi
-        '';
-    };
 in if nixpkgs.lib.inNixShell
    then shell
    else (mkHaskellPackages false).streamly-process

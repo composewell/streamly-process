@@ -63,12 +63,16 @@ import Data.Char (isSpace)
 import Data.Word (Word8)
 import Streamly.Data.Array.Unboxed (Array)
 import Streamly.Data.Fold (Fold)
+import Streamly.Data.Stream (Stream)
+import Streamly.Data.Stream.Concurrent (MonadAsync)
 import Streamly.Internal.Data.Parser (Parser)
-import Streamly.Prelude (MonadAsync, SerialT)
 
-import qualified Streamly.Internal.Data.Fold as Fold
-import qualified Streamly.Internal.Data.Parser as Parser
-import qualified Streamly.Internal.Data.Stream.IsStream as Stream
+import qualified Streamly.Data.Fold as Fold
+import qualified Streamly.Data.Parser as Parser
+
+import qualified Streamly.Data.Stream as Stream
+import qualified Streamly.Internal.Data.Stream as Stream (parseMany)
+
 import qualified Streamly.Internal.System.Process as Process
 
 -- $setup
@@ -77,10 +81,10 @@ import qualified Streamly.Internal.System.Process as Process
 -- >>> import Data.Function ((&))
 -- >>> import qualified Streamly.Internal.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Prelude as Stream
+-- >>> import qualified Streamly.Data.Stream as Stream
 -- >>> import qualified Streamly.Internal.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
--- >>> import qualified Streamly.Internal.Data.Stream.IsStream as Stream
+-- >>> import qualified Streamly.Internal.Data.Stream as Stream
 
 {-# INLINE quotedWord #-}
 quotedWord :: MonadCatch m => Parser m Char String
@@ -101,15 +105,15 @@ quotedWord =
 -- /Internal/
 {-# INLINE streamWith #-}
 streamWith :: MonadCatch m =>
-    (FilePath -> [String] -> SerialT m a) -> String -> SerialT m a
+    (FilePath -> [String] -> Stream m a) -> String -> Stream m a
 streamWith f cmd =
-    Stream.concatM $ do
-        xs <- Stream.toList
+    Stream.concatMapM (\() -> do
+        xs <- Stream.fold Fold.toList
                 $ Stream.parseMany quotedWord
                 $ Stream.fromList cmd
         case xs of
             y:ys -> return $ f y ys
-            _ -> error "streamWith: empty command"
+            _ -> error "streamWith: empty command") (Stream.fromPure ())
 
 -- | A modifier for process running APIs in "Streamly.System.Process" to run
 -- command strings.
@@ -126,7 +130,7 @@ streamWith f cmd =
 runWith :: MonadCatch m =>
     (FilePath -> [String] -> m a) -> String -> m a
 runWith f cmd = do
-    xs <- Stream.toList
+    xs <- Stream.fold Fold.toList
             $ Stream.parseMany quotedWord
             $ Stream.fromList cmd
     case xs of
@@ -147,18 +151,18 @@ runWith f cmd = do
 --
 -- /Internal/
 pipeWith :: MonadCatch m =>
-       (FilePath -> [String] -> SerialT m a -> SerialT m b)
+       (FilePath -> [String] -> Stream m a -> Stream m b)
     -> String
-    -> SerialT m a
-    -> SerialT m b
+    -> Stream m a
+    -> Stream m b
 pipeWith f cmd input =
-    Stream.concatM $ do
-        xs <- Stream.toList
+    Stream.concatMapM (\() -> do
+        xs <- Stream.fold Fold.toList
                 $ Stream.parseMany quotedWord
                 $ Stream.fromList cmd
         case xs of
             y:ys -> return $ f y ys input
-            _ -> error "streamWith: empty command"
+            _ -> error "streamWith: empty command") (Stream.fromPure ())
 
 
 -- | @pipeChunks command input@ runs the executable with arguments specified by
@@ -188,7 +192,7 @@ pipeWith f cmd input =
 -- /Pre-release/
 {-# INLINE pipeChunks #-}
 pipeChunks :: (MonadAsync m, MonadCatch m) =>
-    String -> SerialT m (Array Word8) -> SerialT m (Array Word8)
+    String -> Stream m (Array Word8) -> Stream m (Array Word8)
 pipeChunks = pipeWith Process.pipeChunks
 
 -- | Like 'pipeChunks' except that it works on a stream of bytes instead of
@@ -204,7 +208,7 @@ pipeChunks = pipeWith Process.pipeChunks
 -- /Pre-release/
 {-# INLINE pipeBytes #-}
 pipeBytes :: (MonadAsync m, MonadCatch m) =>
-    String -> SerialT m Word8 -> SerialT m Word8
+    String -> Stream m Word8 -> Stream m Word8
 pipeBytes = pipeWith Process.pipeBytes
 
 -- | Like 'pipeChunks' except that it works on a stream of chars instead of
@@ -220,7 +224,7 @@ pipeBytes = pipeWith Process.pipeBytes
 -- /Pre-release/
 {-# INLINE pipeChars #-}
 pipeChars :: (MonadAsync m, MonadCatch m) =>
-    String -> SerialT m Char -> SerialT m Char
+    String -> Stream m Char -> Stream m Char
 pipeChars = pipeWith Process.pipeChars
 
 -------------------------------------------------------------------------------
@@ -242,7 +246,7 @@ pipeChars = pipeWith Process.pipeChars
 --
 -- /Pre-release/
 {-# INLINE toBytes #-}
-toBytes :: (MonadAsync m, MonadCatch m) => String -> SerialT m Word8
+toBytes :: (MonadAsync m, MonadCatch m) => String -> Stream m Word8
 toBytes = streamWith Process.toBytes
 
 -- |
@@ -254,7 +258,7 @@ toBytes = streamWith Process.toBytes
 --
 -- /Pre-release/
 {-# INLINE toChunks #-}
-toChunks :: (MonadAsync m, MonadCatch m) => String -> SerialT m (Array Word8)
+toChunks :: (MonadAsync m, MonadCatch m) => String -> Stream m (Array Word8)
 toChunks = streamWith Process.toChunks
 
 -- |
@@ -265,13 +269,13 @@ toChunks = streamWith Process.toChunks
 --
 -- /Pre-release/
 {-# INLINE toChars #-}
-toChars :: (MonadAsync m, MonadCatch m) => String -> SerialT m Char
+toChars :: (MonadAsync m, MonadCatch m) => String -> Stream m Char
 toChars = streamWith Process.toChars
 
 -- |
 -- >>> toLines f = streamWith (Process.toLines f)
 --
--- >>> toLines Fold.toList "echo -e hello\\\\nworld" & Stream.toList
+-- >>> toLines Fold.toList "echo -e hello\\\\nworld" & Stream.fold Fold.toList
 -- ["hello","world"]
 --
 -- /Pre-release/
@@ -280,7 +284,7 @@ toLines ::
     (MonadAsync m, MonadCatch m)
     => Fold m Char a
     -> String       -- ^ Command
-    -> SerialT m a -- ^ Output Stream
+    -> Stream m a -- ^ Output Stream
 toLines f = streamWith (Process.toLines f)
 
 -- |
