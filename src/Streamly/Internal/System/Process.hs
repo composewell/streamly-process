@@ -102,7 +102,7 @@ import Data.Function ((&))
 import Data.Word (Word8)
 import Foreign.C.Error (Errno(..), ePIPE)
 import GHC.IO.Exception (IOException(..), IOErrorType(..))
-import Streamly.Data.Array.Unboxed (Array)
+import Streamly.Data.Array (Array)
 import Streamly.Data.Fold (Fold)
 import Streamly.Data.Stream (Stream)
 import Streamly.Data.Stream.Concurrent (MonadAsync)
@@ -129,7 +129,7 @@ import System.Process
     )
 #endif
 
-import qualified Streamly.Data.Array.Unboxed as Array
+import qualified Streamly.Data.Array as Array
 import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Stream as Stream
 
@@ -137,12 +137,13 @@ import qualified Streamly.Data.Stream as Stream
 import Streamly.Internal.System.IO (defaultChunkSize)
 
 import qualified Streamly.Internal.Console.Stdio as Stdio
-import qualified Streamly.Internal.Data.Array.Unboxed.Stream
+import qualified Streamly.Internal.Data.Stream.Chunked
     as ArrayStream (arraysOf)
-import qualified Streamly.Internal.Data.Stream as Stream (bracket')
+--import qualified Streamly.Internal.Data.Stream as Stream (bracket')
+import qualified Streamly.Internal.Data.Stream.Exception.Lifted as Stream
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
-    as Handle (getChunks, putChunks)
+    as Handle (readChunks, putChunks)
 import qualified Streamly.Internal.Unicode.Stream as Unicode
 
 -- $setup
@@ -371,7 +372,7 @@ putChunksClose h input =
 
 {-# INLINE toChunksClose #-}
 toChunksClose :: MonadAsync m => Handle -> Stream m (Array Word8)
-toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.getChunks h)
+toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.readChunks h)
 
 {-# INLINE pipeChunksWithAction #-}
 pipeChunksWithAction ::
@@ -382,7 +383,7 @@ pipeChunksWithAction ::
     -> [String]             -- ^ Arguments
     -> Stream m a     -- ^ Output stream
 pipeChunksWithAction run modCfg path args =
-    Stream.bracket'
+    Stream.bracket3
           alloc cleanupNormal cleanupException cleanupException run
 
     where

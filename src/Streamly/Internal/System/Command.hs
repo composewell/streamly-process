@@ -61,7 +61,7 @@ where
 import Control.Monad.Catch (MonadCatch)
 import Data.Char (isSpace)
 import Data.Word (Word8)
-import Streamly.Data.Array.Unboxed (Array)
+import Streamly.Data.Array (Array)
 import Streamly.Data.Fold (Fold)
 import Streamly.Data.Stream (Stream)
 import Streamly.Data.Stream.Concurrent (MonadAsync)
@@ -71,7 +71,7 @@ import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Parser as Parser
 
 import qualified Streamly.Data.Stream as Stream
-import qualified Streamly.Internal.Data.Stream as Stream (parseMany)
+import qualified Streamly.Internal.Data.Stream as Stream (rights)
 
 import qualified Streamly.Internal.System.Process as Process
 
@@ -87,7 +87,7 @@ import qualified Streamly.Internal.System.Process as Process
 -- >>> import qualified Streamly.Internal.Data.Stream as Stream
 
 {-# INLINE quotedWord #-}
-quotedWord :: MonadCatch m => Parser m Char String
+quotedWord :: MonadCatch m => Parser Char m String
 quotedWord =
     let isQt = (`elem` ['"', '\''])
      in Parser.wordQuotedBy False (== '\\') isQt isQt id isSpace Fold.toList
@@ -109,6 +109,7 @@ streamWith :: MonadCatch m =>
 streamWith f cmd =
     Stream.concatMapM (\() -> do
         xs <- Stream.fold Fold.toList
+                $ Stream.rights
                 $ Stream.parseMany quotedWord
                 $ Stream.fromList cmd
         case xs of
@@ -131,6 +132,7 @@ runWith :: MonadCatch m =>
     (FilePath -> [String] -> m a) -> String -> m a
 runWith f cmd = do
     xs <- Stream.fold Fold.toList
+            $ Stream.rights
             $ Stream.parseMany quotedWord
             $ Stream.fromList cmd
     case xs of
@@ -158,6 +160,7 @@ pipeWith :: MonadCatch m =>
 pipeWith f cmd input =
     Stream.concatMapM (\() -> do
         xs <- Stream.fold Fold.toList
+                $ Stream.rights
                 $ Stream.parseMany quotedWord
                 $ Stream.fromList cmd
         case xs of
