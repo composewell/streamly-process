@@ -371,9 +371,7 @@ pipeBytes'3 = monadicIO $ run checkFailAction
         S.fold Fold.drain $
             Proc.pipeBytes'
                 interpreterFile [interpreterArg, executableFileFail] S.nil
-        return
-
-        
+        return True
 
     failAction (ProcessFailure exitCode) =
         return (exitCode == 1)
