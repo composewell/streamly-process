@@ -30,11 +30,11 @@ import qualified Streamly.Data.Stream as S
 import qualified Streamly.System.Process as Proc
 
 -- Internal imports
-import qualified Streamly.Internal.Data.Array.Unboxed.Stream as AS
+import qualified Streamly.Internal.Data.Stream.Chunked as AS
     (arraysOf, concat)
 import qualified Streamly.Internal.Data.Stream as S
-    (nilM, lefts, rights)
-import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, getBytes)
+    (lefts, rights)
+import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, readChunks)
 import qualified Streamly.Internal.System.Process as Proc
     (pipeChunks', pipeBytes', toChunks', toBytes')
 
@@ -148,13 +148,13 @@ toBytes1 =
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
-                    let strm = FH.getBytes handle
-                    return $ S.finally (hClose handle) strm
+                    let strm = FH.readChunks handle
+                    return $ S.finallyIO (hClose handle) strm
 
             run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
             genList <- run $ S.fold Fold.toList genStrm
-            byteList <- run $ S.fold Fold.toList byteStrm
+            byteList <- run $ S.fold Fold.toList $ AS.concat byteStrm
             run $ removeFile charFile
             listEquals (==) genList byteList
 
@@ -182,13 +182,13 @@ toChunks1 =
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
-                    let strm = FH.getBytes handle
-                    return $ S.finally (hClose handle) strm
+                    let strm = FH.readChunks handle
+                    return $ S.finallyIO (hClose handle) strm
 
             run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
             genList <- run $ S.fold Fold.toList (AS.concat genStrm)
-            byteList <- run $ S.fold Fold.toList byteStrm
+            byteList <- run $ S.fold Fold.toList $ AS.concat byteStrm
             run $ removeFile charFile
             listEquals (==) genList byteList
 
