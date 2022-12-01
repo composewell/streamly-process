@@ -26,7 +26,7 @@
 -- >>> :set -XScopedTypeVariables
 -- >>> import Data.Char (toUpper)
 -- >>> import Data.Function ((&))
--- >>> import Streamly.Prelude (async)
+-- >>> import Streamly.Internal.Data.Stream.Concurrent (append2)
 -- >>> import qualified Streamly.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Array as Array
 -- >>> import qualified Streamly.Data.Fold as Fold
@@ -86,7 +86,7 @@
 -- >>> :{
 -- pgrep =
 --    Dir.toFiles "."
---  & Stream.concatMapWith async grep
+--  & Stream.concatMapWith append2 grep
 --  & Stream.fold Stdio.writeChunks
 -- :}
 --

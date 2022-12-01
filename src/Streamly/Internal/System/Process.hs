@@ -135,7 +135,7 @@ import Streamly.Internal.System.IO (defaultChunkSize)
 import qualified Streamly.Internal.Console.Stdio as Stdio
 import qualified Streamly.Internal.Data.Stream.Chunked
     as ArrayStream (arraysOf)
-import qualified Streamly.Internal.Data.Stream.Concurrent as Concur
+import qualified Streamly.Data.Stream.Concurrent as Concur
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (readChunks, putChunks)
@@ -257,7 +257,7 @@ instance Exception ProcessFailure where
         "Process failed with exit code: " ++ show exitCode
 
 parallel :: MonadAsync m => Stream m a -> Stream m a -> Stream m a
-parallel s1 = Concur.eval . Concur.append2 s1
+parallel s1 s2 = Concur.parConcatList (Concur.eager True) [s1, s2]
 
 -------------------------------------------------------------------------------
 -- Transformation
@@ -267,9 +267,9 @@ parallel s1 = Concur.eval . Concur.append2 s1
 -- already guaranteed to be closed (we can assert that) by the time we reach
 -- here. We should not kill the process, rather wait for it to terminate
 -- normally.
-cleanupNormal :: MonadIO m =>
-    (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> m ()
-cleanupNormal (_, _, _, procHandle) = liftIO $ do
+cleanupNormal ::
+    (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> IO ()
+cleanupNormal (_, _, _, procHandle) = do
 #ifdef USE_NATIVE
     -- liftIO $ putStrLn "cleanupNormal waiting"
     status <- wait procHandle
@@ -293,9 +293,9 @@ cleanupNormal (_, _, _, procHandle) = liftIO $ do
 -- Since we are using SIGTERM to kill the process, it may block forever. We can
 -- possibly use a timer and send a SIGKILL after the timeout if the process is
 -- still hanging around.
-cleanupException :: MonadIO m =>
-    (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> m ()
-cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = liftIO $ do
+cleanupException ::
+    (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> IO ()
+cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = do
     -- Send a SIGTERM to the process
 #ifdef USE_NATIVE
     terminate ph
@@ -370,7 +370,7 @@ putChunksClose h input =
 
 {-# INLINE toChunksClose #-}
 toChunksClose :: MonadAsync m => Handle -> Stream m (Array Word8)
-toChunksClose h = Stream.afterIO (liftIO $ hClose h) (Handle.readChunks h)
+toChunksClose h = Stream.afterIO (hClose h) (Handle.readChunks h)
 
 {-# INLINE pipeChunksWithAction #-}
 pipeChunksWithAction ::
@@ -386,7 +386,7 @@ pipeChunksWithAction run modCfg path args =
 
     where
 
-    alloc = liftIO $ createProc' modCfg path args
+    alloc = createProc' modCfg path args
 
 {-# INLINE pipeChunks'With #-}
 pipeChunks'With ::
@@ -428,9 +428,9 @@ pipeChunks' = pipeChunks'With id
 --
 -- >>> :{
 --    pipeBytes' "echo" ["hello world"] Stream.nil
---  & Stream.rights
+--  & Stream.catRights
 --  & pipeBytes' "tr" ["[:lower:]", "[:upper:]"]
---  & Stream.rights
+--  & Stream.catRights
 --  & Stream.fold Stdio.write
 --  :}
 --HELLO WORLD
