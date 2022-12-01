@@ -71,7 +71,7 @@ import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Parser as Parser
 
 import qualified Streamly.Data.Stream as Stream
-import qualified Streamly.Internal.Data.Stream as Stream (rights)
+import qualified Streamly.Internal.Data.Stream as Stream (catRights)
 
 import qualified Streamly.Internal.System.Process as Process
 
@@ -109,7 +109,7 @@ streamWith :: MonadCatch m =>
 streamWith f cmd =
     Stream.concatMapM (\() -> do
         xs <- Stream.fold Fold.toList
-                $ Stream.rights
+                $ Stream.catRights
                 $ Stream.parseMany quotedWord
                 $ Stream.fromList cmd
         case xs of
@@ -132,7 +132,7 @@ runWith :: MonadCatch m =>
     (FilePath -> [String] -> m a) -> String -> m a
 runWith f cmd = do
     xs <- Stream.fold Fold.toList
-            $ Stream.rights
+            $ Stream.catRights
             $ Stream.parseMany quotedWord
             $ Stream.fromList cmd
     case xs of
@@ -160,7 +160,7 @@ pipeWith :: MonadCatch m =>
 pipeWith f cmd input =
     Stream.concatMapM (\() -> do
         xs <- Stream.fold Fold.toList
-                $ Stream.rights
+                $ Stream.catRights
                 $ Stream.parseMany quotedWord
                 $ Stream.fromList cmd
         case xs of
