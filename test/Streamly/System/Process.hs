@@ -33,7 +33,7 @@ import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.Data.Stream.Chunked as AS
     (arraysOf, concat)
 import qualified Streamly.Internal.Data.Stream as S
-    (lefts, rights)
+    (catLefts, catRights)
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
 import qualified Streamly.Internal.System.Process as Proc
     (pipeChunks', pipeBytes', toChunks', toBytes')
@@ -144,7 +144,7 @@ toBytes1 =
         monadicIO $ do
             catBinary <- run $ which "cat"
             let
-                genStrm = S.rights $ Proc.toBytes' catBinary [charFile]
+                genStrm = S.catRights $ Proc.toBytes' catBinary [charFile]
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
@@ -178,7 +178,7 @@ toChunks1 =
         monadicIO $ do
             catBinary <- run $ which "cat"
             let
-                genStrm = S.rights $ Proc.toChunks' catBinary [charFile]
+                genStrm = S.catRights $ Proc.toChunks' catBinary [charFile]
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
@@ -335,7 +335,7 @@ pipeBytes'1 =
             trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
-                genStrm = S.rights $ Proc.pipeBytes'
+                genStrm = S.catRights $ Proc.pipeBytes'
                             trBinary
                             ["[a-z]", "[A-Z]"]
                             inputStream
@@ -351,7 +351,7 @@ pipeBytes'2 =
         monadicIO $ do
             let
                 inputStream = S.fromList ls
-                outStream = S.lefts $
+                outStream = S.catLefts $
                     Proc.pipeBytes'
                     interpreterFile
                     [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
@@ -403,7 +403,7 @@ pipeChunks'1 =
             let
                 inputStream = S.fromList ls
 
-                genStrm = AS.concat $ S.rights $
+                genStrm = AS.concat $ S.catRights $
                     Proc.pipeChunks'
                     trBinary
                     ["[a-z]", "[A-Z]"]
@@ -421,7 +421,7 @@ pipeChunks'2 =
         monadicIO $ do
             let
                 inputStream = S.fromList ls
-                outStream = AS.concat $ S.lefts $
+                outStream = AS.concat $ S.catLefts $
                     Proc.pipeChunks'
                     interpreterFile
                     [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
