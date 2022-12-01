@@ -23,7 +23,6 @@ import qualified Streamly.Internal.System.Command as Cmd
 -- Internal imports
 import qualified Streamly.Internal.FileSystem.Handle as FH
 import qualified Streamly.Internal.System.Process as Proc
-import qualified Streamly.Internal.Data.Stream.Chunked as AS
 
 -- XXX replace with streamly versions once they are fixed
 {-# INLINE rights #-}
@@ -149,8 +148,7 @@ pipeBytes' trPath outputHdl = do
         $ Proc.pipeBytes'
             trPath
             ["[a-z]", "[A-Z]"]
-        $ AS.concat
-        $ FH.readChunks inputHdl
+        $ FH.read inputHdl
     hClose inputHdl
 
 pipeBytes :: String-> Handle -> IO ()
@@ -160,8 +158,7 @@ pipeBytes trPath outputHdl = do
         $ Proc.pipeBytes
             trPath
             ["[a-z]", "[A-Z]"]
-        $ AS.concat
-        $ FH.readChunks inputHdl
+        $ FH.read inputHdl
     hClose inputHdl
 
 processBytesToStderr :: Handle -> IO ()
@@ -172,8 +169,7 @@ processBytesToStderr outputHdl = do
         $ Proc.pipeBytes'
             trToStderr
             ["[a-z]", "[A-Z]"]
-        $ AS.concat
-        $ FH.readChunks inputHdl
+        $ FH.read inputHdl
     hClose inputHdl
 
 pipeChunks :: String -> Handle -> IO ()

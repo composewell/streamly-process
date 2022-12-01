@@ -34,7 +34,7 @@ import qualified Streamly.Internal.Data.Stream.Chunked as AS
     (arraysOf, concat)
 import qualified Streamly.Internal.Data.Stream as S
     (lefts, rights)
-import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, readChunks)
+import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
 import qualified Streamly.Internal.System.Process as Proc
     (pipeChunks', pipeBytes', toChunks', toBytes')
 
@@ -148,13 +148,13 @@ toBytes1 =
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
-                    let strm = FH.readChunks handle
+                    let strm = FH.read handle
                     return $ S.finallyIO (hClose handle) strm
 
             run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
             genList <- run $ S.fold Fold.toList genStrm
-            byteList <- run $ S.fold Fold.toList $ AS.concat byteStrm
+            byteList <- run $ S.fold Fold.toList byteStrm
             run $ removeFile charFile
             listEquals (==) genList byteList
 
@@ -182,13 +182,13 @@ toChunks1 =
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
-                    let strm = FH.readChunks handle
+                    let strm = FH.read handle
                     return $ S.finallyIO (hClose handle) strm
 
             run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
             genList <- run $ S.fold Fold.toList (AS.concat genStrm)
-            byteList <- run $ S.fold Fold.toList $ AS.concat byteStrm
+            byteList <- run $ S.fold Fold.toList byteStrm
             run $ removeFile charFile
             listEquals (==) genList byteList
 

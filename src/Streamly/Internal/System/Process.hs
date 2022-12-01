@@ -371,7 +371,7 @@ putChunksClose h input =
 
 {-# INLINE toChunksClose #-}
 toChunksClose :: MonadAsync m => Handle -> Stream m (Array Word8)
-toChunksClose h = Stream.after (liftIO $ hClose h) (Handle.readChunks h)
+toChunksClose h = Stream.afterIO (liftIO $ hClose h) (Handle.readChunks h)
 
 {-# INLINE pipeChunksWithAction #-}
 pipeChunksWithAction ::
@@ -382,7 +382,7 @@ pipeChunksWithAction ::
     -> [String]             -- ^ Arguments
     -> Stream m a     -- ^ Output stream
 pipeChunksWithAction run modCfg path args =
-    Stream.bracket3
+    Stream.bracket3IO
           alloc cleanupNormal cleanupException cleanupException run
 
     where
