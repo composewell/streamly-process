@@ -26,7 +26,6 @@
 -- >>> :set -XScopedTypeVariables
 -- >>> import Data.Char (toUpper)
 -- >>> import Data.Function ((&))
--- >>> import Streamly.Internal.Data.Stream.Concurrent (append2)
 -- >>> import qualified Streamly.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Array as Array
 -- >>> import qualified Streamly.Data.Fold as Fold
@@ -34,6 +33,7 @@
 -- >>> import qualified Streamly.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
+-- >>> import qualified Streamly.Data.Stream.Concurrent as Concur
 -- >>> import qualified Streamly.Internal.Data.Stream as Stream
 --
 -- = Executables as functions
@@ -85,8 +85,8 @@
 --
 -- >>> :{
 -- pgrep =
---    Dir.toFiles "."
---  & Stream.concatMapWith append2 grep
+--    Dir.readFiles "."
+--  & Concur.parConcatMap Concur.eager grep
 --  & Stream.fold Stdio.writeChunks
 -- :}
 --
