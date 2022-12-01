@@ -16,14 +16,12 @@ import System.IO
 import Streamly.Data.Stream (Stream)
 
 import qualified Streamly.Data.Fold as FL
-import qualified Streamly.FileSystem.Handle as FH
 import qualified Streamly.Data.Stream as S
 import qualified Streamly.System.Process as Proc
 import qualified Streamly.Internal.System.Command as Cmd
 
 -- Internal imports
-import qualified Streamly.Internal.FileSystem.Handle
-    as FH (getBytes, getChunks, putBytes, putChunks)
+import qualified Streamly.Internal.FileSystem.Handle as FH
 import qualified Streamly.Internal.System.Process as Proc
 
 -- XXX replace with streamly versions once they are fixed
@@ -150,7 +148,7 @@ pipeBytes' trPath outputHdl = do
         $ Proc.pipeBytes'
             trPath
             ["[a-z]", "[A-Z]"]
-        $ FH.getBytes inputHdl
+        $ FH.read inputHdl
     hClose inputHdl
 
 pipeBytes :: String-> Handle -> IO ()
@@ -160,7 +158,7 @@ pipeBytes trPath outputHdl = do
         $ Proc.pipeBytes
             trPath
             ["[a-z]", "[A-Z]"]
-        $ FH.getBytes inputHdl
+        $ FH.read inputHdl
     hClose inputHdl
 
 processBytesToStderr :: Handle -> IO ()
@@ -171,7 +169,7 @@ processBytesToStderr outputHdl = do
         $ Proc.pipeBytes'
             trToStderr
             ["[a-z]", "[A-Z]"]
-        $ FH.getBytes inputHdl
+        $ FH.read inputHdl
     hClose inputHdl
 
 pipeChunks :: String -> Handle -> IO ()
@@ -181,7 +179,7 @@ pipeChunks trPath outputHdl = do
         Proc.pipeChunks
             trPath
             ["[a-z]", "[A-Z]"]
-        $ FH.getChunks inputHdl
+        $ FH.readChunks inputHdl
     hClose inputHdl
 
 pipeChunks' :: String -> Handle -> IO ()
@@ -194,7 +192,7 @@ pipeChunks' trPath outputHdl = do
         $ Proc.pipeChunks'
             trPath
             ["[a-z]", "[A-Z]"]
-            (FH.getChunks inputHdl)
+            (FH.readChunks inputHdl)
     hClose inputHdl
 
 processChunksToStderr :: Handle -> IO ()
@@ -205,7 +203,7 @@ processChunksToStderr outputHdl = do
         $ Proc.pipeChunks'
             trToStderr
             ["[a-z]", "[A-Z]"]
-            (FH.getChunks inputHdl)
+            (FH.readChunks inputHdl)
     hClose inputHdl
 
 -------------------------------------------------------------------------------
