@@ -86,7 +86,7 @@
 -- >>> :{
 -- pgrep =
 --    Dir.readFiles "."
---  & Concur.parConcatMap Concur.eager grep
+--  & Concur.parConcatMap id grep
 --  & Stream.fold Stdio.writeChunks
 -- :}
 --
