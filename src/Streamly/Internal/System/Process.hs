@@ -106,10 +106,6 @@ import Streamly.Data.Array (Array)
 import Streamly.Data.Fold (Fold)
 import Streamly.Data.Stream (Stream)
 import Streamly.Data.Stream.Concurrent (MonadAsync)
-
--- XXX This should be removed and replaced by the new Stream modules
-import Streamly.Prelude (parallel)
-
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
 
@@ -139,7 +135,7 @@ import Streamly.Internal.System.IO (defaultChunkSize)
 import qualified Streamly.Internal.Console.Stdio as Stdio
 import qualified Streamly.Internal.Data.Stream.Chunked
     as ArrayStream (arraysOf)
---import qualified Streamly.Internal.Data.Stream as Stream (bracket')
+import qualified Streamly.Internal.Data.Stream.Concurrent as Concur
 import qualified Streamly.Internal.Data.Stream.Exception.Lifted as Stream
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
@@ -260,6 +256,9 @@ instance Exception ProcessFailure where
 
     displayException (ProcessFailure exitCode) =
         "Process failed with exit code: " ++ show exitCode
+
+parallel :: MonadAsync m => Stream m a -> Stream m a -> Stream m a
+parallel s1 = Concur.eval . Concur.append2 s1
 
 -------------------------------------------------------------------------------
 -- Transformation
@@ -448,7 +447,7 @@ pipeBytes' ::
 pipeBytes' path args input =
     let input1 = ArrayStream.arraysOf defaultChunkSize input
         output = pipeChunks' path args input1
-     in Stream.unfoldMany (Unfold.either Array.read) output
+     in Stream.unfoldMany (Unfold.either Array.reader) output
 
 {-# INLINE pipeChunksWith #-}
 pipeChunksWith ::
@@ -534,7 +533,7 @@ pipeBytes ::
 pipeBytes path args input = -- rights . pipeBytes' path args
     let input1 = ArrayStream.arraysOf defaultChunkSize input
         output = pipeChunks path args input1
-     in Stream.unfoldMany Array.read output
+     in Stream.unfoldMany Array.reader output
 
 {-# DEPRECATED processBytes "Please use pipeBytes instead." #-}
 {-# INLINE processBytes #-}
@@ -642,7 +641,7 @@ toBytes' ::
     -> Stream m (Either Word8 Word8)    -- ^ Output Stream
 toBytes' path args =
     let output = toChunks' path args
-     in Stream.unfoldMany (Unfold.either Array.read) output
+     in Stream.unfoldMany (Unfold.either Array.reader) output
 
 -- | The following code is equivalent to the shell command @echo "hello
 -- world"@:
@@ -662,7 +661,7 @@ toBytes ::
     -> Stream m Word8    -- ^ Output Stream
 toBytes path args =
     let output = toChunks path args
-     in Stream.unfoldMany Array.read output
+     in Stream.unfoldMany Array.reader output
 
 -- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
 -- of @Word8@.
