@@ -136,7 +136,6 @@ import qualified Streamly.Internal.Console.Stdio as Stdio
 import qualified Streamly.Internal.Data.Stream.Chunked
     as ArrayStream (arraysOf)
 import qualified Streamly.Internal.Data.Stream.Concurrent as Concur
-import qualified Streamly.Internal.Data.Stream.Exception.Lifted as Stream
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (readChunks, putChunks)

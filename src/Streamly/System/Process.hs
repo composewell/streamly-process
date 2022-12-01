@@ -28,7 +28,7 @@
 -- >>> import Data.Function ((&))
 -- >>> import Streamly.Prelude (async)
 -- >>> import qualified Streamly.Console.Stdio as Stdio
--- >>> import qualified Streamly.Data.Array.Unboxed as Array
+-- >>> import qualified Streamly.Data.Array as Array
 -- >>> import qualified Streamly.Data.Fold as Fold
 -- >>> import qualified Streamly.Data.Stream as Stream
 -- >>> import qualified Streamly.System.Process as Process
@@ -135,7 +135,7 @@ import Streamly.Internal.System.Process
 -- >>> import Data.Char (toUpper)
 -- >>> import Data.Function ((&))
 -- >>> import qualified Streamly.Console.Stdio as Stdio
--- >>> import qualified Streamly.Data.Array.Unboxed as Array
+-- >>> import qualified Streamly.Data.Array as Array
 -- >>> import qualified Streamly.Data.Fold as Fold
 -- >>> import qualified Streamly.Data.Stream as Stream
 -- >>> import qualified Streamly.System.Process as Process
