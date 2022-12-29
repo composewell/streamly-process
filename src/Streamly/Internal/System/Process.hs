@@ -104,8 +104,7 @@ import Foreign.C.Error (Errno(..), ePIPE)
 import GHC.IO.Exception (IOException(..), IOErrorType(..))
 import Streamly.Data.Array (Array)
 import Streamly.Data.Fold (Fold)
-import Streamly.Data.Stream (Stream)
-import Streamly.Data.Stream.Concurrent (MonadAsync)
+import Streamly.Data.Stream.Prelude (MonadAsync, Stream)
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
 
@@ -127,7 +126,6 @@ import System.Process
 
 import qualified Streamly.Data.Array as Array
 import qualified Streamly.Data.Fold as Fold
-import qualified Streamly.Data.Stream as Stream
 
 -- Internal imports
 import Streamly.Internal.System.IO (defaultChunkSize)
@@ -135,7 +133,7 @@ import Streamly.Internal.System.IO (defaultChunkSize)
 import qualified Streamly.Internal.Console.Stdio as Stdio
 import qualified Streamly.Internal.Data.Stream.Chunked
     as ArrayStream (arraysOf)
-import qualified Streamly.Data.Stream.Concurrent as Concur
+import qualified Streamly.Data.Stream.Prelude as Stream
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
     as Handle (readChunks, putChunks)
@@ -147,7 +145,7 @@ import qualified Streamly.Internal.Unicode.Stream as Unicode
 -- >>> import Data.Function ((&))
 -- >>> import qualified Streamly.Internal.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Data.Stream as Stream
+-- >>> import qualified Streamly.Data.Stream.Prelude as Stream
 -- >>> import qualified Streamly.Internal.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.Data.Stream as Stream
@@ -257,7 +255,7 @@ instance Exception ProcessFailure where
         "Process failed with exit code: " ++ show exitCode
 
 parallel :: MonadAsync m => Stream m a -> Stream m a -> Stream m a
-parallel s1 s2 = Concur.parConcatList (Concur.eager True) [s1, s2]
+parallel s1 s2 = Stream.parConcatList (Stream.eager True) [s1, s2]
 
 -------------------------------------------------------------------------------
 -- Transformation
@@ -381,7 +379,7 @@ pipeChunksWithAction ::
     -> [String]             -- ^ Arguments
     -> Stream m a     -- ^ Output stream
 pipeChunksWithAction run modCfg path args =
-    Stream.bracket3IO
+    Stream.bracketIO3
           alloc cleanupNormal cleanupException cleanupException run
 
     where

@@ -29,11 +29,10 @@
 -- >>> import qualified Streamly.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Array as Array
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Data.Stream as Stream
 -- >>> import qualified Streamly.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
--- >>> import qualified Streamly.Data.Stream.Concurrent as Concur
+-- >>> import qualified Streamly.Data.Stream.Prelude as Stream
 -- >>> import qualified Streamly.Internal.Data.Stream as Stream
 --
 -- = Executables as functions
@@ -86,7 +85,7 @@
 -- >>> :{
 -- pgrep =
 --    Dir.readFiles "."
---  & Concur.parConcatMap id grep
+--  & Stream.parConcatMap id grep
 --  & Stream.fold Stdio.writeChunks
 -- :}
 --
@@ -137,7 +136,7 @@ import Streamly.Internal.System.Process
 -- >>> import qualified Streamly.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Array as Array
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Data.Stream as Stream
+-- >>> import qualified Streamly.Data.Stream.Prelude as Stream
 -- >>> import qualified Streamly.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir

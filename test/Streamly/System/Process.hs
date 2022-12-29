@@ -32,8 +32,6 @@ import qualified Streamly.System.Process as Proc
 -- Internal imports
 import qualified Streamly.Internal.Data.Stream.Chunked as AS
     (arraysOf, concat)
-import qualified Streamly.Internal.Data.Stream as S
-    (catLefts, catRights)
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
 import qualified Streamly.Internal.System.Process as Proc
     (pipeChunks', pipeBytes', toChunks', toBytes')
