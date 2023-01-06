@@ -440,11 +440,11 @@ pipeBytes' ::
     => FilePath         -- ^ Executable name or path
     -> [String]         -- ^ Arguments
     -> Stream m Word8        -- ^ Input Stream
-    -> Stream m (Either Word8 Word8) -- ^ Output Stream
+    -> Stream m (Word8) -- ^ Output Stream
 pipeBytes' path args input =
     let input1 = ArrayStream.arraysOf defaultChunkSize input
         output = pipeChunks' path args input1
-     in Stream.unfoldMany (Unfold.either Array.reader) output
+     in Stream.unfoldMany (Unfold.either Array.reader Array.reader) output
 
 {-# INLINE pipeChunksWith #-}
 pipeChunksWith ::
@@ -635,10 +635,10 @@ toBytes' ::
     (MonadAsync m, MonadCatch m)
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
-    -> Stream m (Either Word8 Word8)    -- ^ Output Stream
+    -> Stream m (Word8)    -- ^ Output Stream
 toBytes' path args =
     let output = toChunks' path args
-     in Stream.unfoldMany (Unfold.either Array.reader) output
+     in Stream.unfoldMany (Unfold.either Array.reader Array.reader) output
 
 -- | The following code is equivalent to the shell command @echo "hello
 -- world"@:

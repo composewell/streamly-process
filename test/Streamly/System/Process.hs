@@ -142,7 +142,7 @@ toBytes1 =
         monadicIO $ do
             catBinary <- run $ which "cat"
             let
-                genStrm = S.catRights $ Proc.toBytes' catBinary [charFile]
+                genStrm = Proc.toBytes' catBinary [charFile]
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
@@ -333,7 +333,7 @@ pipeBytes'1 =
             trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
-                genStrm = S.catRights $ Proc.pipeBytes'
+                genStrm = Proc.pipeBytes'
                             trBinary
                             ["[a-z]", "[A-Z]"]
                             inputStream
@@ -349,7 +349,7 @@ pipeBytes'2 =
         monadicIO $ do
             let
                 inputStream = S.fromList ls
-                outStream = S.catLefts $
+                outStream =
                     Proc.pipeBytes'
                     interpreterFile
                     [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
