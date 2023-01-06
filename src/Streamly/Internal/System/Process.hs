@@ -426,9 +426,7 @@ pipeChunks' = pipeChunks'With id
 --
 -- >>> :{
 --    pipeBytes' "echo" ["hello world"] Stream.nil
---  & Stream.catRights
 --  & pipeBytes' "tr" ["[:lower:]", "[:upper:]"]
---  & Stream.catRights
 --  & Stream.fold Stdio.write
 --  :}
 --HELLO WORLD
@@ -623,11 +621,10 @@ toChunksWith modifier path args =
 --
 -- >>> :{
 --   Process.toBytes' "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
--- & Stream.fold (Fold.partition Stdio.writeErr Stdio.write)
+-- & Stream.fold Stdio.write
 -- :}
--- world
 -- hello
--- ((),())
+-- world
 --
 -- @since 0.1.0
 {-# INLINE toBytes' #-}
