@@ -9,7 +9,6 @@
       https://github.com/NixOS/nixpkgs/archive/refs/tags/22.05.tar.gz)
         {}
 , compiler ? "ghc922"
-, c2nix ? "" # cabal2nix CLI options
 }:
 let
     utils =
