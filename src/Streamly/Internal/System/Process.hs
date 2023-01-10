@@ -438,11 +438,13 @@ pipeBytes' ::
     => FilePath         -- ^ Executable name or path
     -> [String]         -- ^ Arguments
     -> Stream m Word8        -- ^ Input Stream
-    -> Stream m (Word8) -- ^ Output Stream
+    -> Stream m (Either Word8 Word8) -- ^ Output Stream
 pipeBytes' path args input =
     let input1 = ArrayStream.arraysOf defaultChunkSize input
         output = pipeChunks' path args input1
-     in Stream.unfoldMany (Unfold.either Array.reader Array.reader) output
+        leftRdr = fmap Left Array.reader
+        rightRdr = fmap Right Array.reader
+     in Stream.unfoldMany (Unfold.either leftRdr rightRdr) output
 
 {-# INLINE pipeChunksWith #-}
 pipeChunksWith ::
@@ -621,10 +623,11 @@ toChunksWith modifier path args =
 --
 -- >>> :{
 --   Process.toBytes' "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
--- & Stream.fold Stdio.write
+-- & Stream.fold (Fold.partition Stdio.writeErr Stdio.write)
 -- :}
--- hello
 -- world
+-- hello
+-- ((),())
 --
 -- @since 0.1.0
 {-# INLINE toBytes' #-}
@@ -632,10 +635,12 @@ toBytes' ::
     (MonadAsync m, MonadCatch m)
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
-    -> Stream m (Word8)    -- ^ Output Stream
+    -> Stream m (Either Word8 Word8)    -- ^ Output Stream
 toBytes' path args =
     let output = toChunks' path args
-     in Stream.unfoldMany (Unfold.either Array.reader Array.reader) output
+        leftRdr = fmap Left Array.reader
+        rightRdr = fmap Right Array.reader
+     in Stream.unfoldMany (Unfold.either leftRdr rightRdr) output
 
 -- | The following code is equivalent to the shell command @echo "hello
 -- world"@:

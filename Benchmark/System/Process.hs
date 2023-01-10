@@ -132,6 +132,7 @@ deleteFiles = do
 toBytes' :: String-> Handle -> IO ()
 toBytes' catPath outH =
     FH.putBytes outH
+        $ rights
         $ Proc.toBytes' catPath [largeByteFile]
 
 toChunks' :: String -> Handle -> IO ()
@@ -144,10 +145,9 @@ pipeBytes' :: String-> Handle -> IO ()
 pipeBytes' trPath outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     _ <- S.fold (FL.partition (FH.write outputHdl) (FH.write outputHdl))
-        $ fmap Right
-            $ Proc.pipeBytes'
-                trPath
-                ["[a-z]", "[A-Z]"]
+        $ Proc.pipeBytes'
+            trPath
+            ["[a-z]", "[A-Z]"]
         $ FH.read inputHdl
     hClose inputHdl
 
@@ -165,6 +165,7 @@ processBytesToStderr :: Handle -> IO ()
 processBytesToStderr outputHdl = do
     inputHdl <- openFile largeCharFile ReadMode
     FH.putBytes outputHdl
+        $ lefts
         $ Proc.pipeBytes'
             trToStderr
             ["[a-z]", "[A-Z]"]

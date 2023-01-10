@@ -9,6 +9,7 @@
       https://github.com/NixOS/nixpkgs/archive/refs/tags/22.05.tar.gz)
         {}
 , compiler ? "ghc922"
+, c2nix ? "" # cabal2nix CLI options
 }:
 let
     utils =
@@ -36,10 +37,10 @@ let
                   utils.local super "streamly-process" ./. "--benchmark" inShell;
                   streamly = utils.composewell super
                       "streamly"
-                      "c2f79142411383e14d8c7db0f2456775549925f0";
+                      "deb16f8670a4226f58177d8b1f0d6d840bff4dcd";
                   streamly-core = utils.composewellDir super
                       "streamly"
-                      "c2f79142411383e14d8c7db0f2456775549925f0"
+                      "deb16f8670a4226f58177d8b1f0d6d840bff4dcd"
                       "/core";
             });
       });
