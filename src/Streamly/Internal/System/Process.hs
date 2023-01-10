@@ -426,7 +426,9 @@ pipeChunks' = pipeChunks'With id
 --
 -- >>> :{
 --    pipeBytes' "echo" ["hello world"] Stream.nil
+--  & Stream.catRights
 --  & pipeBytes' "tr" ["[:lower:]", "[:upper:]"]
+--  & Stream.catRights
 --  & Stream.fold Stdio.write
 --  :}
 --HELLO WORLD
