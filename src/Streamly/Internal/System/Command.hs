@@ -63,16 +63,12 @@ import Data.Char (isSpace)
 import Data.Word (Word8)
 import Streamly.Data.Array (Array)
 import Streamly.Data.Fold (Fold)
-import Streamly.Data.Stream (Stream)
-import Streamly.Data.Stream.Concurrent (MonadAsync)
+import Streamly.Data.Stream.Prelude (MonadAsync, Stream)
 import Streamly.Internal.Data.Parser (Parser)
 
 import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Parser as Parser
-
-import qualified Streamly.Data.Stream as Stream
-import qualified Streamly.Internal.Data.Stream as Stream (catRights)
-
+import qualified Streamly.Data.Stream.Prelude as Stream
 import qualified Streamly.Internal.System.Process as Process
 
 -- $setup
@@ -81,7 +77,6 @@ import qualified Streamly.Internal.System.Process as Process
 -- >>> import Data.Function ((&))
 -- >>> import qualified Streamly.Internal.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Data.Stream as Stream
 -- >>> import qualified Streamly.Internal.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
 -- >>> import qualified Streamly.Internal.Data.Stream as Stream

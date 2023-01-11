@@ -1,0 +1,25 @@
+cradle:
+  multi:
+    - path: "./"
+      config:
+        cradle:
+          cabal:
+            - path: "./src"
+              component: "lib:streamly-process"
+
+    - path: "./Benchmark"
+      config:
+        cradle:
+          cabal:
+            - path: "./Benchmark/System/Process.hs"
+              component: "bench:Benchmark.System.Process"
+
+    - path: "./test"
+      config:
+        cradle:
+          cabal:
+            - path: "./test/Streamly/System/Process.hs"
+              component: "test:Test.System.Process"
+dependencies:
+  - streamly-process.cabal
+  - hie.yaml
