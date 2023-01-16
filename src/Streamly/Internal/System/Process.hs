@@ -255,7 +255,7 @@ instance Exception ProcessFailure where
         "Process failed with exit code: " ++ show exitCode
 
 parallel :: MonadAsync m => Stream m a -> Stream m a -> Stream m a
-parallel s1 s2 = Stream.parConcatList (Stream.eager True) [s1, s2]
+parallel s1 s2 = Stream.parList (Stream.eager True) [s1, s2]
 
 -------------------------------------------------------------------------------
 -- Transformation
