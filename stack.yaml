@@ -7,9 +7,9 @@ extra-deps:
 - unicode-data-0.3.0
 - lockfree-queue-0.2.4
 - github: composewell/streamly
-  commit: "3c30d60db0a84fa40571bbdb76fcfa6b4df31881"
+  commit: "8240f5f870fe47623df99514aed6a542f80c9641"
 - github: composewell/streamly
-  commit: "3c30d60db0a84fa40571bbdb76fcfa6b4df31881"
+  commit: "8240f5f870fe47623df99514aed6a542f80c9641"
   subdirs:
     - core
 
