@@ -36,10 +36,10 @@ let
                   utils.local super "streamly-process" ./. "--benchmark" inShell;
                   streamly = utils.composewell super
                       "streamly"
-                      "3c30d60db0a84fa40571bbdb76fcfa6b4df31881";
+                      "8240f5f870fe47623df99514aed6a542f80c9641";
                   streamly-core = utils.composewellDir super
                       "streamly"
-                      "3c30d60db0a84fa40571bbdb76fcfa6b4df31881"
+                      "8240f5f870fe47623df99514aed6a542f80c9641"
                       "/core";
             });
       });
