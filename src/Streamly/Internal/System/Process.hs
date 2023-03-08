@@ -131,8 +131,6 @@ import qualified Streamly.Data.Fold as Fold
 import Streamly.Internal.System.IO (defaultChunkSize)
 
 import qualified Streamly.Internal.Console.Stdio as Stdio
-import qualified Streamly.Internal.Data.Stream.Chunked
-    as ArrayStream (arraysOf)
 import qualified Streamly.Data.Stream.Prelude as Stream
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
@@ -442,7 +440,7 @@ pipeBytes' ::
     -> Stream m Word8        -- ^ Input Stream
     -> Stream m (Either Word8 Word8) -- ^ Output Stream
 pipeBytes' path args input =
-    let input1 = ArrayStream.arraysOf defaultChunkSize input
+    let input1 = Stream.chunksOf defaultChunkSize input
         output = pipeChunks' path args input1
         leftRdr = fmap Left Array.reader
         rightRdr = fmap Right Array.reader
@@ -530,7 +528,7 @@ pipeBytes ::
     -> Stream m Word8    -- ^ Input Stream
     -> Stream m Word8    -- ^ Output Stream
 pipeBytes path args input = -- rights . pipeBytes' path args
-    let input1 = ArrayStream.arraysOf defaultChunkSize input
+    let input1 = Stream.chunksOf defaultChunkSize input
         output = pipeChunks path args input1
      in Stream.unfoldMany Array.reader output
 
