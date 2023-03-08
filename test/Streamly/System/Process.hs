@@ -10,6 +10,8 @@ import Control.Exception (Exception)
 import Control.Monad (unless)
 import Control.Monad.Catch (throwM, catch)
 import Control.Monad.IO.Class (MonadIO(..))
+import Streamly.Data.Array (Array, Unbox)
+import Streamly.Data.Stream (Stream)
 import Streamly.System.Process (ProcessFailure (..))
 import System.Directory (removeFile, findExecutable, doesFileExist)
 import System.Exit (exitSuccess)
@@ -25,13 +27,11 @@ import Test.QuickCheck
     )
 import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
 
+import qualified Streamly.Data.Array as Array
 import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Stream as S
 import qualified Streamly.System.Process as Proc
 
--- Internal imports
-import qualified Streamly.Internal.Data.Stream.Chunked as AS
-    (arraysOf, concat)
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
 import qualified Streamly.Internal.System.Process as Proc
     (pipeChunks', pipeBytes', toChunks', toBytes')
@@ -170,6 +170,10 @@ toBytes2 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
+{-# INLINE concatArr #-}
+concatArr :: (Monad m, Unbox a) => Stream m (Array a) -> Stream m a
+concatArr = S.unfoldMany Array.reader
+
 toChunks1 :: Property
 toChunks1 =
     forAll (choose (minBlockCount, maxBlockCount)) $ \numBlock ->
@@ -185,7 +189,7 @@ toChunks1 =
 
             run $ generateCharFile numBlock
             byteStrm <- run ioByteStrm
-            genList <- run $ S.fold Fold.toList (AS.concat genStrm)
+            genList <- run $ S.fold Fold.toList (concatArr genStrm)
             byteList <- run $ S.fold Fold.toList byteStrm
             run $ removeFile charFile
             listEquals (==) genList byteList
@@ -262,11 +266,11 @@ processChunksConsumeAllInput =
             let
                 inputStream = S.fromList ls
 
-                genStrm = AS.concat $
+                genStrm = concatArr $
                     Proc.pipeChunks
                     trBinary
                     ["[a-z]", "[A-Z]"]
-                    (AS.arraysOf arrayChunkSize inputStream)
+                    (S.chunksOf arrayChunkSize inputStream)
 
                 charUpperStrm = fmap toUpper inputStream
 
@@ -282,11 +286,11 @@ processChunksConsumePartialInput =
             let
                 inputStream = S.fromList ls
 
-                procOutput = AS.concat $
+                procOutput = concatArr $
                     Proc.pipeChunks
                     path
                     ["-n", "1"]
-                    (AS.arraysOf arrayChunkSize inputStream)
+                    (S.chunksOf arrayChunkSize inputStream)
 
                 headLine =
                       S.foldMany
@@ -401,11 +405,11 @@ pipeChunks'1 =
             let
                 inputStream = S.fromList ls
 
-                genStrm = AS.concat $ S.catRights $
+                genStrm = concatArr $ S.catRights $
                     Proc.pipeChunks'
                     trBinary
                     ["[a-z]", "[A-Z]"]
-                    (AS.arraysOf arrayChunkSize inputStream)
+                    (S.chunksOf arrayChunkSize inputStream)
 
                 charUpperStrm = fmap toUpper inputStream
 
@@ -419,11 +423,11 @@ pipeChunks'2 =
         monadicIO $ do
             let
                 inputStream = S.fromList ls
-                outStream = AS.concat $ S.catLefts $
+                outStream = concatArr $ S.catLefts $
                     Proc.pipeChunks'
                     interpreterFile
                     [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
-                    (AS.arraysOf arrayChunkSize inputStream)
+                    (S.chunksOf arrayChunkSize inputStream)
 
                 charUpperStrm = fmap toUpper inputStream
 
@@ -482,7 +486,7 @@ main = do
             -- things first.
             describe "pipeChunks'" $ do
                 prop
-                    "AS.concat $ pipeChunks' tr = map toUpper"
+                    "concatArr $ pipeChunks' tr = map toUpper"
                     pipeChunks'1
                 prop
                     "error stream of pipeChunks' tr = map toUpper"
