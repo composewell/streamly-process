@@ -5,7 +5,7 @@ module Main (main) where
 import Control.Exception (finally)
 import Data.Either (isRight, fromRight, isLeft, fromLeft)
 import Data.Word (Word8)
-import Gauge (defaultMain, bench, nfIO)
+import Test.Tasty.Bench (defaultMain, bench, nfIO)
 import System.Directory (removeFile, findExecutable)
 import System.IO
     ( Handle
