@@ -1,4 +1,5 @@
 {-# LANGUAGE  ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fspec-constr-recursive=4 #-}
 
 module Main (main) where
 

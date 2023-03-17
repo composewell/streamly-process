@@ -43,7 +43,7 @@ jobs:
       BUILD: ${{ matrix.build }}
       GHCVER: ${{ matrix.ghc_version }}
       #RESOLVER: ${{ matrix.resolver }}
-      #CABAL_BUILD_OPTIONS: ${{ matrix.cabal_build_options }}
+      CABAL_BUILD_OPTIONS: ${{ matrix.cabal_build_options }}
       CABAL_PROJECT: ${{ matrix.cabal_project }}
       #DISABLE_DOCS: ${{ matrix.disable_docs }}
       #DISABLE_SDIST_BUILD: ${{ matrix.disable_sdist_build }}
@@ -73,10 +73,11 @@ jobs:
             cabal-version: 3.8.1.0
             cabal_project: cabal.project.Werror
 
-          - name: 9.2.7
+          - name: 9.2.7+fusion-plugin
             ghc_version: 9.2.7
             build: cabal-v2
             runner: ubuntu-latest
+            cabal-build-options: --flag fusion-plugin
             cabal-version: 3.6
             cabal_project: cabal.project.user
 
