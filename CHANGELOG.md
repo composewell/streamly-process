@@ -2,6 +2,7 @@
 
 ## 0.3.0 (Mar 2023)
 
+* Added a `Streamly.System.Command` module
 * `toChunks` and `toBytes` now make the stdin available to the process being
   executed.
 * Allow streamly 0.9.0

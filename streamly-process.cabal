@@ -81,6 +81,7 @@ library
   hs-source-dirs: src
   exposed-modules:
     Streamly.System.Process
+    Streamly.System.Command
     Streamly.Internal.System.Process
     Streamly.Internal.System.Command
   if flag (use-native) && !os(windows)

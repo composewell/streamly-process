@@ -6,29 +6,6 @@
 -- Stability   : experimental
 -- Portability : GHC
 --
--- This is a higher level convenience wrapper module over the lower level
--- module "Streamly.System.Process". The Process module requires specifying the
--- command executable and its arguments separately (e.g. "ls" "-al") whereas
--- using this module we can specify the executable and its arguments as a
--- single command string e.g.  we can execute "ls -al". The command string is
--- parsed in the same way as the posix shell would parse it, quotes must be
--- balanced unless escaped. Quoted strings are treated as a single token,
--- however, quotes are not stripped and passed verbatim to the process (We
--- should perhaps eat the quotes?).  Backslash can also be used to escape
--- space.
---
--- You can use this module to execute system commands and compose them with
--- Haskell.  It does not use the system shell to execute commands, they are
--- executed as independent processes. This provides a convenient and powerful
--- way to replace shell scripting with Haskell. Instead of composing commands
--- using shell you can use Haskell Streamly streaming APIs to compose them with
--- better efficiency and type safety.
---
--- Normally, you should not need the system shell but if you want to use shell
--- scripts in your program then you can take a look at the @streamly-shell@
--- package which provides convenient wrapper over "Streamly.System.Process" to
--- execute shell scripts, commands.
-
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
