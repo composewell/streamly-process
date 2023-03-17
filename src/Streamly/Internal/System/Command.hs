@@ -84,14 +84,14 @@ quotedWord =
 streamWith :: MonadCatch m =>
     (FilePath -> [String] -> Stream m a) -> String -> Stream m a
 streamWith f cmd =
-    Stream.concatMapM (\() -> do
+    Stream.concatEffect $ do
         xs <- Stream.fold Fold.toList
                 $ Stream.catRights
                 $ Stream.parseMany quotedWord
                 $ Stream.fromList cmd
         case xs of
             y:ys -> return $ f y ys
-            _ -> error "streamWith: empty command") (Stream.fromPure ())
+            _ -> error "streamWith: empty command"
 
 -- | A modifier for process running APIs in "Streamly.System.Process" to run
 -- command strings.
@@ -135,14 +135,14 @@ pipeWith :: MonadCatch m =>
     -> Stream m a
     -> Stream m b
 pipeWith f cmd input =
-    Stream.concatMapM (\() -> do
+    Stream.concatEffect $ do
         xs <- Stream.fold Fold.toList
                 $ Stream.catRights
                 $ Stream.parseMany quotedWord
                 $ Stream.fromList cmd
         case xs of
             y:ys -> return $ f y ys input
-            _ -> error "streamWith: empty command") (Stream.fromPure ())
+            _ -> error "streamWith: empty command"
 
 
 -- | @pipeChunks command input@ runs the executable with arguments specified by
