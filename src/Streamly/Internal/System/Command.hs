@@ -40,8 +40,8 @@ import Data.Char (isSpace)
 import Data.Word (Word8)
 import Streamly.Data.Array (Array)
 import Streamly.Data.Fold (Fold)
+import Streamly.Data.Parser (Parser)
 import Streamly.Data.Stream.Prelude (MonadAsync, Stream)
-import Streamly.Internal.Data.Parser (Parser)
 
 import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Parser as Parser
