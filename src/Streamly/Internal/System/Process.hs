@@ -135,7 +135,9 @@ import Streamly.Data.Fold (Fold)
 import Streamly.Data.Stream.Prelude (MonadAsync, Stream)
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
+#if !defined(mingw32_HOST_OS)
 import System.Posix.Types (CUid (..), CGid (..))
+#endif
 
 #ifdef USE_NATIVE
 import Control.Exception (SomeException)
@@ -382,7 +384,13 @@ setSession x (Config cfg) =
 --
 -- Default is 'Nothing' - inherit from the parent.
 setUserId :: Maybe Word32 -> Config -> Config
-setUserId x (Config cfg) = Config $ cfg { child_user = CUid <$> x }
+#if defined(mingw32_HOST_OS)
+setUserId _ (Config cfg) =
+    Config cfg
+#else
+setUserId x (Config cfg) =
+    Config $ cfg { child_user = CUid <$> x }
+#endif
 
 -- | Use the POSIX @setgid@ call to set the group id of the new process before
 -- executing the command. The parent process must have sufficient privileges to
@@ -392,7 +400,13 @@ setUserId x (Config cfg) = Config $ cfg { child_user = CUid <$> x }
 --
 -- Default is 'Nothing' - inherit from the parent.
 setGroupId :: Maybe Word32 -> Config -> Config
-setGroupId x (Config cfg) = Config $ cfg { child_group = CGid <$> x }
+#if defined(mingw32_HOST_OS)
+setGroupId _ (Config cfg) =
+    Config cfg
+#else
+setGroupId x (Config cfg) =
+    Config $ cfg { child_group = CGid <$> x }
+#endif
 
 -- See https://www.cons.org/cracauer/sigint.html for more details on signal
 -- handling by interactive processes.
