@@ -6,13 +6,13 @@
 -- Stability   : experimental
 -- Portability : GHC
 --
--- Use command strings to execute OS processes and use them just like native
--- Haskell functions to generate, transform or consume streams. It provides a
--- powerful way to write high level Haskell scripts to perform tasks like shell
--- scripts but not requiring the shell and with C-like performance.
+-- Use command strings to execute OS processes. These processes can be used
+-- just like native Haskell functions - to generate, transform or consume
+-- streams. It provides a powerful way to write high-level Haskell scripts to
+-- perform tasks similar to shell scripts without requiring the shell.
+-- Moreover, the Haskell scripts provide C-like performance.
 --
--- This module is a higher level wrapper over the "Streamly.System.Process"
--- module.
+-- This module is a wrapper over the "Streamly.System.Process" module.
 --
 -- See also: "Streamly.Internal.System.Command".
 --
@@ -101,8 +101,8 @@ import Streamly.Internal.System.Process (ProcessFailure (..))
 -- A command string is parsed in the same way as a posix shell would parse it.
 -- A command string consists of whitespace separated tokens with the first
 -- token treated as the executable name and the rest as arguments. Whitespace
--- can be escaped using @\@. Alternatively, double quotes or single quotes can
--- be used to enclose tokens with whitespaces. Quotes can be escaped using @\@.
+-- can be escaped using @\\@. Alternatively, double quotes or single quotes can
+-- be used to enclose tokens with whitespaces. Quotes can be escaped using @\\@.
 -- Single quotes inside double quotes or vice-versa are treated as normal
 -- characters.
 --
@@ -113,8 +113,8 @@ import Streamly.Internal.System.Process (ProcessFailure (..))
 -- >>> [str|ls -al "#{f} with spaces"|]
 -- "ls -al \"file name with spaces\""
 --
--- Now you can write the examples in the "Streamly.System.Process" module more
--- conveniently.
+-- With the "Streamly.System.Command" module you can write the examples in the
+-- "Streamly.System.Process" module more conveniently.
 --
 -- = Executables as functions
 --

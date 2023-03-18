@@ -267,14 +267,14 @@ mkConfig path args = Config $ CreateProcess
 
 -- XXX use osPath
 
--- | Set the current working directory of the new process. When 'Nothing' the
+-- | Set the current working directory of the new process. When 'Nothing', the
 -- working directory is inherited from the parent process.
 --
 -- Default is 'Nothing' - inherited from the parent process.
 setCwd :: Maybe (FilePath) -> Config -> Config
 setCwd path (Config cfg) = Config $ cfg { cwd = path }
 
--- | Set the environment variables for the new process. When 'Nothing' the the
+-- | Set the environment variables for the new process. When 'Nothing', the
 -- environment is inherited from the parent process.
 --
 -- Default is 'Nothing' - inherited from the parent process.
@@ -365,7 +365,7 @@ data Session =
     | NewSession -- ^ Detach process from the current session
     | NewConsole -- ^ Windows only, CREATE_NEW_CONSOLE flag
 
--- | Set the terminal session for the process.
+-- | Define the terminal session behavior for the new process.
 --
 -- Default is 'InheritSession'.
 setSession :: Session -> Config -> Config

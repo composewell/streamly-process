@@ -4,7 +4,7 @@ packages: streamly-process.cabal
 --    type: git
 --    location: https://github.com/composewell/streamly.git
 --    tag: master
--- 
+--
 -- source-repository-package
 --   type: git
 --   location: https://github.com/composewell/streamly.git

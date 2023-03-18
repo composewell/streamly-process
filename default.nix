@@ -41,11 +41,23 @@ let
                           sha256 = "hoSV6Q2+X5a7hFnJAArqNPjcMaCVyX9Vz4FcxeJ+jgI=";
                         } {};
                   streamly =
-                      super.callHackageDirect
+                    nixpkgs.haskell.lib.overrideCabal
+                      (super.callHackageDirect
                         { pkg = "streamly";
                           ver = "0.9.0";
-                          sha256 = "eOxVb8qQjZDo1+S7CStqYSExOg2QHWkMY+zlOYqwZak=";
-                        } {};
+                          sha256 = "sha256-eOxVb8qQjZDo1+S7CStqYSExOg2QHWkMY+zlOYqwZak=";
+                        } {})
+                    #  (let src = fetchGit {
+                    #      url = "git@github.com:composewell/streamly.git";
+                    #      rev = "96d222e45cf3aee9b6847c0d14fde967a760fee8";
+                    #  }; in super.callCabal2nix "streamly" src {})
+                      (old:
+                        { librarySystemDepends =
+                            if nixpkgs.lib.strings.hasInfix "darwin" builtins.currentSystem
+                            then [nixpkgs.darwin.apple_sdk.frameworks.Cocoa]
+                            else [];
+                        });
+
             });
       });
 

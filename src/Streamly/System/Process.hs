@@ -6,7 +6,7 @@
 -- Stability   : experimental
 -- Portability : GHC
 --
--- Use OS processes just like native Haskell functions to generate, transform
+-- Use OS processes just like native Haskell functions - to generate, transform
 -- or consume streams.
 --
 -- See "Streamly.System.Command" module for a higher level wrapper over this
@@ -26,7 +26,7 @@ module Streamly.System.Process
     -- $overview
 
     -- * Exceptions
-    -- | Since we are composing using Streamly streaming pipeline there is
+    -- | Since we are composing using Streamly's streaming pipeline there is
     -- nothing special about exception handling, it works the same as in
     -- Streamly.  Like the @pipefail@ option in shells, exceptions are
     -- propagated if any of the stages fail.
@@ -94,9 +94,9 @@ import Streamly.Internal.System.Process
 -- streamly can be used to combine them. This allows you to seamlessly
 -- integrate external programs into your Haskell program.
 --
--- We recommend that you use Streamly threads instead of system processes where
--- possible as they have a simpler programming model and processes have a
--- larger performance overhead.
+-- We recommend using Haskell functions with Streamly threads for performing
+-- tasks whenever possible. This approach offers a simpler programming model
+-- compared to system processes, which also have a larger performance overhead.
 --
 -- = Executables as functions
 --
