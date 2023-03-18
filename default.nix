@@ -34,13 +34,18 @@ let
             (with nixpkgs.haskell.lib; self: super: {
                 streamly-process =
                   utils.local super "streamly-process" ./. "--benchmark" inShell;
-                  streamly = utils.composewell super
-                      "streamly"
-                      "8240f5f870fe47623df99514aed6a542f80c9641";
-                  streamly-core = utils.composewellDir super
-                      "streamly"
-                      "8240f5f870fe47623df99514aed6a542f80c9641"
-                      "/core";
+                  streamly-core =
+                      super.callHackageDirect
+                        { pkg = "streamly-core";
+                          ver = "0.1.0";
+                          sha256 = "hoSV6Q2+X5a7hFnJAArqNPjcMaCVyX9Vz4FcxeJ+jgI=";
+                        } {};
+                  streamly =
+                      super.callHackageDirect
+                        { pkg = "streamly";
+                          ver = "0.9.0";
+                          sha256 = "eOxVb8qQjZDo1+S7CStqYSExOg2QHWkMY+zlOYqwZak=";
+                        } {};
             });
       });
 

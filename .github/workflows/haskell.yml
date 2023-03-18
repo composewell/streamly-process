@@ -58,50 +58,41 @@ jobs:
       matrix:
         include:
 
-          - name: doctest
-            ghc_version: 9.2.2
+          - name: 9.2.7-doctest
+            ghc_version: 9.2.7
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.6
             doctest: "y"
             cabal_project: cabal.project.user
 
-          - name: 9.4.2
-            ghc_version: 9.4.2
+          - name: 9.4.4+Werror
+            ghc_version: 9.4.4
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.8.1.0
-            cabal_project: cabal.project.user
-            pack_options: >-
-              DISABLE_BENCH=y
+            cabal_project: cabal.project.Werror
 
-          - name: 9.2.2
-            ghc_version: 9.2.2
+          - name: 9.2.7
+            ghc_version: 9.2.7
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.6
             cabal_project: cabal.project.user
 
-          - name: 9.0.1
-            ghc_version: 9.0.1
+          - name: 9.0.2
+            ghc_version: 9.0.2
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
             cabal_project: cabal.project.user
 
-          - name: 8.10.7+sdist # sdist with cabal.project
+          - name: 8.10.7
             ghc_version: 8.10.7
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
             cabal_project: cabal.project.user
-
-          - name: 8.10.7+Werror
-            ghc_version: 8.10.7
-            build: cabal-v2
-            cabal_project: cabal.project.Werror
-            runner: ubuntu-latest
-            cabal-version: 3.2
 
           - name: 8.10.7+macOS
             ghc_version: 8.10.7

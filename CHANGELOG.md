@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (Mar 2023)
 
 * `toChunks` and `toBytes` now make the stdin available to the process being
   executed.
+* Allow streamly 0.9.0
+* Signature changes - removed the IsStream constraint, now all APIs use the
+  monomorphic `Stream` type.
 
 ## 0.2.0.1 (Mar 2022)
 

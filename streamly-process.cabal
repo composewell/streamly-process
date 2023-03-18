@@ -1,6 +1,6 @@
 cabal-version:       2.2
 name:                streamly-process
-version:             0.2.0.1
+version:             0.3.0
 synopsis:            Use OS processes as stream transformation functions
 description:
     Run operating system processes as stream source, sink or transformation
@@ -15,10 +15,10 @@ maintainer:          streamly@composewell.com
 copyright:           Composewell Technologies
 category:            Streamly, Streaming, System
 stability:           Experimental
-tested-with:         GHC==9.4.2
-                   , GHC==9.2.1
-                   , GHC==9.0.1
-                   , GHC==8.10.5
+tested-with:         GHC==9.4.4
+                   , GHC==9.2.7
+                   , GHC==9.0.2
+                   , GHC==8.10.7
                    , GHC==8.8.4
                    , GHC==8.6.5
 build-type:          Simple
@@ -68,6 +68,9 @@ common compile-options
     -Wno-monomorphism-restriction
     -Wno-prepositive-qualified-module
     -Wno-unsafe
+  if !impl(ghc < 9.2)
+    ghc-options:
+      -Wno-missing-kind-signatures
 
 common optimization-options
   ghc-options:
