@@ -12,7 +12,7 @@
 -- See "Streamly.System.Command" module for a higher level wrapper over this
 -- module.
 --
--- See also: "Streamly.Internal.System.Process".
+-- See also: "Streamly.Internal.System.Process" for unreleased functions.
 --
 module Streamly.System.Process
     (
@@ -25,8 +25,35 @@ module Streamly.System.Process
     -- * Overview
     -- $overview
 
-    -- * Types
+    -- * Exceptions
+    -- | Since we are composing using Streamly streaming pipeline there is
+    -- nothing special about exception handling, it works the same as in
+    -- Streamly.  Like the @pipefail@ option in shells, exceptions are
+    -- propagated if any of the stages fail.
       ProcessFailure (..)
+
+    -- * Process Configuration
+    , Config
+
+    {-
+    -- ** Common Config Options
+    -- | These options apply to both POSIX and Windows.
+    , setCwd
+    , setEnv
+    , closeFiles
+    , newProcessGroup
+    , setSession
+
+    -- * Posix Only Options
+    -- | These options have no effect on Windows.
+    , parentIgnoresInterrupt
+    , setUserId
+    , setGroupId
+
+    -- * Windows Only Options
+    -- | These options have no effect on Posix.
+    , waitForChildTree
+    -}
 
     -- * Generation
     , toChunks
@@ -55,6 +82,7 @@ import Streamly.Internal.System.Process
 -- >>> import qualified Streamly.Data.Stream.Prelude as Stream
 -- >>> import qualified Streamly.System.Process as Process
 -- >>> import qualified Streamly.Unicode.Stream as Unicode
+--
 -- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
 -- >>> import qualified Streamly.Internal.Data.Stream as Stream
 
@@ -122,23 +150,3 @@ import Streamly.Internal.System.Process
 --  & Stream.parConcatMap id grep
 --  & Stream.fold Stdio.writeChunks
 -- :}
---
--- = Exception handling
---
--- Since we are composing using Streamly streaming pipeline there is nothing
--- special about exception handling, it works the same as in Streamly.  Like
--- the @pipefail@ option in shells, exceptions are propagated if any of the
--- stages fail.
---
--- = Process Attributes
---
--- When a new process is spawned, the following attributes are inherited from
--- the parent process:
---
--- * Current working directory
--- * Environment
--- * Open file descriptors
--- * Process group
--- * Process uid and gid
--- * Signal handlers
--- * Terminal (Session)

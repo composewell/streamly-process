@@ -48,6 +48,31 @@ module Streamly.Internal.System.Process
     (
     -- * Process Configuration
       Config
+
+    -- ** Common Config Options
+    -- | These options apply to both POSIX and Windows.
+    , setCwd
+    , setEnv
+    {-
+    , setStdin
+    , setStdout
+    , setStderr
+    -}
+    , closeFiles
+    , newProcessGroup
+    , setSession
+
+    -- * Posix Only Options
+    -- | These options have no effect on Windows.
+    , parentIgnoresInterrupt
+    , setUserId
+    , setGroupId
+
+    -- * Windows Only Options
+    -- | These options have no effect on Posix.
+    , waitForChildTree
+
+    -- * Internal
     , inheritStdin
     , inheritStdout
     , pipeStdErr
@@ -85,6 +110,11 @@ module Streamly.Internal.System.Process
     , pipeChunksEither
     , pipeChunksEitherWith
 
+    -- * Standalone Processes
+    , standalone
+    , interactive
+    , daemon
+
     -- * Deprecated
     , processBytes
     , processChunks
@@ -97,7 +127,7 @@ import Control.Monad (void, unless)
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Function ((&))
-import Data.Word (Word8)
+import Data.Word (Word8, Word32)
 import Foreign.C.Error (Errno(..), ePIPE)
 import GHC.IO.Exception (IOException(..), IOErrorType(..))
 import Streamly.Data.Array (Array)
@@ -105,6 +135,7 @@ import Streamly.Data.Fold (Fold)
 import Streamly.Data.Stream.Prelude (MonadAsync, Stream)
 import System.Exit (ExitCode(..))
 import System.IO (hClose, Handle)
+import System.Posix.Types (CUid (..), CGid (..))
 
 #ifdef USE_NATIVE
 import Control.Exception (SomeException)
@@ -119,6 +150,7 @@ import System.Process
     , waitForProcess
     , CmdSpec(..)
     , terminateProcess
+    , withCreateProcess
     )
 #endif
 
@@ -158,12 +190,18 @@ import qualified Streamly.Internal.Unicode.Stream as Unicode (lines)
 -- from the parent process:
 --
 -- * Current working directory
--- * Environment
+-- * Environment variables
 -- * Open file descriptors
 -- * Process group
+-- * Terminal session
+--
+-- On POSIX:
+--
 -- * Process uid and gid
 -- * Signal handlers
--- * Terminal (Session)
+--
+-- On Windows by default the parent process waits for the entire child process
+-- tree to finish.
 --
 #ifdef USE_NATIVE
 
@@ -187,6 +225,7 @@ inheritStdout :: Config -> Config
 inheritStdout (Config _) = Config True
 
 #else
+
 newtype Config = Config CreateProcess
 
 -- | Create a default process configuration from an executable file path and
@@ -210,7 +249,9 @@ mkConfig path args = Config $ CreateProcess
     , child_group = Nothing  -- Posix only
 
     -- Signals (Posix only) behavior
-    -- Reset SIGINT (Ctrl-C) and SIGQUIT (Ctrl-\) to default handlers.
+    -- Ignore SIGINT (Ctrl-C) and SIGQUIT (Ctrl-\) in the parent process until
+    -- the child exits i.e. let the child handle it. See
+    -- https://www.cons.org/cracauer/sigint.html .
     , delegate_ctlc = False
 
     -- Terminal behavior
@@ -221,6 +262,163 @@ mkConfig path args = Config $ CreateProcess
     -- Added by commit 6b8ffe2ec3d115df9ccc047599545ca55c393005
     , use_process_jobs = True -- Windows only
     }
+
+-- XXX use osPath
+
+-- | Set the current working directory of the new process. When 'Nothing' the
+-- working directory is inherited from the parent process.
+--
+-- Default is 'Nothing' - inherited from the parent process.
+setCwd :: Maybe (FilePath) -> Config -> Config
+setCwd path (Config cfg) = Config $ cfg { cwd = path }
+
+-- | Set the environment variables for the new process. When 'Nothing' the the
+-- environment is inherited from the parent process.
+--
+-- Default is 'Nothing' - inherited from the parent process.
+setEnv :: Maybe [(String, String)] -> Config -> Config
+setEnv e (Config cfg) = Config $ cfg { env = e }
+
+{-
+-- XXX We should allow setting only those stdio streams which are not used for
+-- piping. We can either close those or inherit from parent.
+--
+-- * In a source we have to close stdin and use stdout
+-- * In a pipe we have to use both
+-- * In a sink we have to close stdout and use stdin.
+--
+-- Only stderr may be left for setting - either pipe it to merge it with stdout
+-- or inherit or close. Closing may lead to bad behavior in most cases. So it
+-- is either inherit or merge with stdout. Merge with stdout can be achieved by
+-- using the either combinators. So there is nothing really left to set here
+-- for any std stream.
+
+-- UseProc, UsePipe?
+-- | What to do with the stdin, stdout, stderr streams of the process.
+data Stdio =
+      ToHaskell -- ^ Pipe to Haskell Streamly
+    | ToProcess -- ^ Connect to the parent process
+
+toStdStream :: Stdio -> StdStream
+toStdStream x =
+    case x of
+        ToProcess -> Inherit
+        ToHaskell -> CreatePipe
+
+-- | What to do with the @stdin@ stream of the process.
+setStdin :: Stdio -> Config -> Config
+setStdin x (Config cfg) = Config $ cfg { std_in = toStdStream x }
+
+-- | What to do with the @stdout@ stream of the process.
+setStdout :: Stdio -> Config -> Config
+setStdout x (Config cfg) = Config $ cfg { std_out = toStdStream x }
+
+-- | What to do with the @stderr@ stream of the process.
+setStderr :: Stdio -> Config -> Config
+setStderr x (Config cfg) = Config $ cfg { std_err = toStdStream x }
+-}
+
+-- | Close all open file descriptors inherited from the parent process. Note,
+-- this does not apply to stdio descriptors - the behavior of those is determined
+-- by other configuration settings.
+--
+-- Default is 'False'.
+--
+-- Note: if the number of open descriptors is large, it may take a while
+-- closing them.
+closeFiles :: Bool -> Config -> Config
+closeFiles x (Config cfg) = Config $ cfg { close_fds = x }
+
+-- XXX Do these details apply to Windows as well?
+
+-- | If 'True' the new process starts a new process group, becomes a process
+-- group leader, its pid becoming the process group id.
+--
+-- See the POSIX @setpgid@ man page.
+--
+-- Default is 'False', the new process belongs to the parent's process group.
+newProcessGroup :: Bool -> Config -> Config
+newProcessGroup x (Config cfg) = Config $ cfg { create_group = x }
+
+-- | 'InheritSession' makes the new process inherit the terminal session from the
+-- parent process. This is the default.
+--
+-- 'NewSession' makes the new process start with a new session without a
+-- controlling terminal. On POSIX, @setsid@ is used to create a new process
+-- group and session, the pid of the new process is the session id and process
+-- group id as well. On Windows @DETACHED_PROCESS@ flag is used to detach the
+-- process from inherited console session.
+--
+-- 'NewConsole' creates a new terminal and attaches the process to the new
+-- terminal on Windows, using the CREATE_NEW_CONSOLE flag. On POSIX this does
+-- nothing.
+--
+-- For Windows see
+-- * https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
+-- * https://learn.microsoft.com/en-us/windows/console/creation-of-a-console .
+--
+-- For POSIX see, @setsid@ man page.
+data Session =
+      InheritSession -- ^ Inherit the parent session
+    | NewSession -- ^ Detach process from the current session
+    | NewConsole -- ^ Windows only, CREATE_NEW_CONSOLE flag
+
+-- | Set the terminal session for the process.
+--
+-- Default is 'InheritSession'.
+setSession :: Session -> Config -> Config
+setSession x (Config cfg) =
+    Config $
+        case x of
+            InheritSession -> cfg
+            NewSession -> cfg { new_session = True}
+            NewConsole -> cfg {create_new_console = True}
+
+-- | Use the POSIX @setuid@ call to set the user id of the new process before
+-- executing the command. The parent process must have sufficient privileges to
+-- set the user id.
+--
+-- POSIX only. See the POSIX @setuid@ man page.
+--
+-- Default is 'Nothing' - inherit from the parent.
+setUserId :: Maybe Word32 -> Config -> Config
+setUserId x (Config cfg) = Config $ cfg { child_user = CUid <$> x }
+
+-- | Use the POSIX @setgid@ call to set the group id of the new process before
+-- executing the command. The parent process must have sufficient privileges to
+-- set the group id.
+--
+-- POSIX only. See the POSIX @setgid@ man page.
+--
+-- Default is 'Nothing' - inherit from the parent.
+setGroupId :: Maybe Word32 -> Config -> Config
+setGroupId x (Config cfg) = Config $ cfg { child_group = CGid <$> x }
+
+-- See https://www.cons.org/cracauer/sigint.html for more details on signal
+-- handling by interactive processes.
+
+-- | When this is 'True', the parent process ignores user interrupt signals
+-- @SIGINT@ and @SIGQUIT@ delivered to it until the child process exits. If
+-- multiple child processes are started then the default handling in the parent
+-- is restored only after the last one exits.
+--
+-- When a user presses CTRL-C or CTRL-\ on the terminal, a SIGINT or SIGQUIT is
+-- sent to all the foreground processes in the terminal session, this includes
+-- both the child and the parent. By default, on receiving these signals, the
+-- parent process would cleanup and exit, to avoid that and let the child
+-- handle these signals we can choose to ignore these signals in the parent
+-- until the child exits.
+--
+-- POSIX only. Default is 'False'.
+parentIgnoresInterrupt :: Bool -> Config -> Config
+parentIgnoresInterrupt x (Config cfg) = Config $ cfg { delegate_ctlc = x }
+
+-- | On Windows, the parent waits for the entire tree of process i.e. including
+-- processes that are spawned by the child process.
+--
+-- Default is 'True'.
+waitForChildTree :: Bool -> Config -> Config
+waitForChildTree x (Config cfg) = Config $ cfg { use_process_jobs = x }
 
 pipeStdErr :: Config -> Config
 pipeStdErr (Config cfg) = Config $ cfg { std_err = CreatePipe }
@@ -766,3 +964,82 @@ toNull ::
     -> [String] -- ^ Arguments
     -> m ()
 toNull path args = toChunks path args & Stream.fold Fold.drain
+
+-------------------------------------------------------------------------------
+-- Process not interacting with the parent process
+-------------------------------------------------------------------------------
+
+{-# INLINE standalone #-}
+standalone ::
+       Bool -- ^ Wait for process to finish?
+    -> (Bool, Bool, Bool) -- ^ close (stdin, stdout, stderr)
+    -> (Config -> Config)
+    -> FilePath -- ^ Executable name or path
+    -> [String] -- ^ Arguments
+    -> IO (Either ExitCode ProcessHandle)
+standalone wait (close_stdin, close_stdout, close_stderr) modCfg path args =
+    withCreateProcess cfg postCreate
+
+    where
+
+    postCreate _ _ _ procHandle =
+        if wait
+        then fmap Left $ waitForProcess procHandle
+        else return $ Right procHandle
+
+    cfg =
+        let Config c = modCfg $ mkConfig path args
+            s_in = if close_stdin then NoStream else Inherit
+            s_out = if close_stdout then NoStream else Inherit
+            s_err = if close_stderr then NoStream else Inherit
+        in c {std_in = s_in, std_out = s_out, std_err = s_err}
+
+-- | Inherits stdin, stdout, and stderr from the parent, so that the user can
+-- interact with the process, user interrupts are handled by the child process,
+-- the parent waits for the child process to exit.
+--
+-- This is same as the common @system@ function found in other libraries used
+-- to execute commands.
+--
+-- On Windows you can pass @setSession NewConsole@ to create a new console.
+--
+{-# INLINE interactive #-}
+interactive ::
+       (Config -> Config)
+    -> FilePath -- ^ Executable name or path
+    -> [String] -- ^ Arguments
+    -> IO ExitCode
+interactive modCfg path args =
+    withCreateProcess cfg (\_ _ _ p -> waitForProcess p)
+
+    where
+
+    -- let child handle SIGINT/QUIT
+    modCfg1 = (parentIgnoresInterrupt True . modCfg)
+
+    cfg =
+        let Config c = modCfg1 $ mkConfig path args
+        in c {std_in = Inherit, std_out = Inherit, std_err = Inherit}
+
+-- XXX ProcessHandle can be used to terminate the process. re-export
+-- terminateProcess?
+
+-- | Closes stdin, stdout and stderr, creates a new session, detached from the
+-- terminal, the parent does not wait for the process to finish.
+--
+{-# INLINE daemon #-}
+daemon ::
+       (Config -> Config)
+    -> FilePath -- ^ Executable name or path
+    -> [String] -- ^ Arguments
+    -> IO ProcessHandle
+daemon modCfg path args = withCreateProcess cfg (\_ _ _ p -> return p)
+
+    where
+
+    -- Detach terminal
+    modCfg1 = (setSession NewSession . modCfg)
+
+    cfg =
+        let Config c = modCfg1 $ mkConfig path args
+        in c {std_in = NoStream, std_out = NoStream, std_err = NoStream}
