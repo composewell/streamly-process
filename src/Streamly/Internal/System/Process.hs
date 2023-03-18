@@ -59,6 +59,7 @@ module Streamly.Internal.System.Process
     -- | stdout of the process is redirected to output stream.
     , toBytes
     , toChunks
+    , toChunksWith
     , toChars
     , toLines
     , toString
@@ -70,22 +71,19 @@ module Streamly.Internal.System.Process
     -- the process is redirected to the output stream.
     , pipeBytes
     , pipeChunks
+    , pipeChunksWith
     , pipeChars
 
     -- * Stderr
     -- | Like other "Generation" routines but along with stdout, stderr is also
     -- included in the output stream. stdout is converted to 'Right' values in
     -- the output stream and stderr is converted to 'Left' values.
-    , toBytes' -- toBytesEither ?
-    , toChunks'
-    , pipeBytes'
-    , pipeChunks'
-
-    -- * Helpers
-    , toChunksWith
-    , toChunks'With
-    , pipeChunksWith
-    , pipeChunks'With
+    , toBytesEither
+    , toChunksEither
+    , toChunksEitherWith
+    , pipeBytesEither
+    , pipeChunksEither
+    , pipeChunksEitherWith
 
     -- * Deprecated
     , processBytes
@@ -385,15 +383,15 @@ pipeChunksWithAction run modCfg path args =
 
     alloc = createProc' modCfg path args
 
-{-# INLINE pipeChunks'With #-}
-pipeChunks'With ::
+{-# INLINE pipeChunksEitherWith #-}
+pipeChunksEitherWith ::
     (MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
     -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> Stream m (Array Word8)    -- ^ Input stream
     -> Stream m (Either (Array Word8) (Array Word8))     -- ^ Output stream
-pipeChunks'With modifier path args input =
+pipeChunksEitherWith modifier path args input =
     pipeChunksWithAction run (modifier . pipeStdErr) path args
 
     where
@@ -402,18 +400,18 @@ pipeChunks'With modifier path args input =
         putChunksClose stdinH input
             `parallel` fmap Left (toChunksClose stderrH)
             `parallel` fmap Right (toChunksClose stdoutH)
-    run _ = error "pipeChunks'With: Not reachable"
+    run _ = error "pipeChunksEitherWith: Not reachable"
 
-{-# INLINE pipeChunks' #-}
-pipeChunks' ::
+{-# INLINE pipeChunksEither #-}
+pipeChunksEither ::
     (MonadCatch m, MonadAsync m)
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> Stream m (Array Word8)    -- ^ Input stream
     -> Stream m (Either (Array Word8) (Array Word8))     -- ^ Output stream
-pipeChunks' = pipeChunks'With id
+pipeChunksEither = pipeChunksEitherWith id
 
--- | @pipeBytes' path args input@ runs the executable at @path@ using @args@
+-- | @pipeBytesEither path args input@ runs the executable at @path@ using @args@
 -- as arguments and @input@ stream as its standard input.  The error stream of
 -- the executable is presented as 'Left' values in the resulting stream and
 -- output stream as 'Right' values.
@@ -424,25 +422,25 @@ pipeChunks' = pipeChunks'With id
 -- world" | tr [:lower:] [:upper:]@:
 --
 -- >>> :{
---    pipeBytes' "echo" ["hello world"] Stream.nil
+--    pipeBytesEither "echo" ["hello world"] Stream.nil
 --  & Stream.catRights
---  & pipeBytes' "tr" ["[:lower:]", "[:upper:]"]
+--  & pipeBytesEither "tr" ["[:lower:]", "[:upper:]"]
 --  & Stream.catRights
 --  & Stream.fold Stdio.write
 --  :}
 --HELLO WORLD
 --
 -- @since 0.1.0
-{-# INLINE pipeBytes' #-}
-pipeBytes' ::
+{-# INLINE pipeBytesEither #-}
+pipeBytesEither ::
     (MonadCatch m, MonadAsync m)
     => FilePath         -- ^ Executable name or path
     -> [String]         -- ^ Arguments
     -> Stream m Word8        -- ^ Input Stream
     -> Stream m (Either Word8 Word8) -- ^ Output Stream
-pipeBytes' path args input =
+pipeBytesEither path args input =
     let input1 = Stream.chunksOf defaultChunkSize input
-        output = pipeChunks' path args input1
+        output = pipeChunksEither path args input1
         leftRdr = fmap Left Array.reader
         rightRdr = fmap Right Array.reader
      in Stream.unfoldMany (Unfold.either leftRdr rightRdr) output
@@ -528,7 +526,7 @@ pipeBytes ::
     -> [String]     -- ^ Arguments
     -> Stream m Word8    -- ^ Input Stream
     -> Stream m Word8    -- ^ Output Stream
-pipeBytes path args input = -- rights . pipeBytes' path args
+pipeBytes path args input = -- rights . pipeBytesEither path args
     let input1 = Stream.chunksOf defaultChunkSize input
         output = pipeChunks path args input1
      in Stream.unfoldMany Array.reader output
@@ -580,14 +578,14 @@ pipeChars path args input =
 -- Generation
 -------------------------------------------------------------------------------
 
-{-# INLINE toChunks'With #-}
-toChunks'With ::
+{-# INLINE toChunksEitherWith #-}
+toChunksEitherWith ::
     (MonadCatch m, MonadAsync m)
     => (Config -> Config)   -- ^ Config modifier
     -> FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> Stream m (Either (Array Word8) (Array Word8))     -- ^ Output stream
-toChunks'With modifier path args =
+toChunksEitherWith modifier path args =
     pipeChunksWithAction run (modifier . inheritStdin . pipeStdErr) path args
 
     where
@@ -595,7 +593,7 @@ toChunks'With modifier path args =
     run (_, Just stdoutH, Just stderrH, _) =
         fmap Left (toChunksClose stderrH)
             `parallel` fmap Right (toChunksClose stdoutH)
-    run _ = error "toChunks'With: Not reachable"
+    run _ = error "toChunksEitherWith: Not reachable"
 
 {-# INLINE toChunksWith #-}
 toChunksWith ::
@@ -612,7 +610,7 @@ toChunksWith modifier path args =
     run (_, Just stdoutH, _, _) = toChunksClose stdoutH
     run _ = error "toChunksWith: Not reachable"
 
--- | @toBytes' path args@ runs the executable at @path@ using @args@ as
+-- | @toBytesEither path args@ runs the executable at @path@ using @args@ as
 -- arguments and returns a stream of 'Either' bytes. The 'Left' values are from
 -- @stderr@ and the 'Right' values are from @stdout@ of the executable.
 --
@@ -623,7 +621,7 @@ toChunksWith modifier path args =
 -- back to @stdout@ and @stderr@ respectively:
 --
 -- >>> :{
---   Process.toBytes' "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
+--   Process.toBytesEither "/bin/bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
 -- & Stream.fold (Fold.partition Stdio.writeErr Stdio.write)
 -- :}
 -- world
@@ -631,14 +629,14 @@ toChunksWith modifier path args =
 -- ((),())
 --
 -- @since 0.1.0
-{-# INLINE toBytes' #-}
-toBytes' ::
+{-# INLINE toBytesEither #-}
+toBytesEither ::
     (MonadAsync m, MonadCatch m)
     => FilePath     -- ^ Executable name or path
     -> [String]     -- ^ Arguments
     -> Stream m (Either Word8 Word8)    -- ^ Output Stream
-toBytes' path args =
-    let output = toChunks' path args
+toBytesEither path args =
+    let output = toChunksEither path args
         leftRdr = fmap Left Array.reader
         rightRdr = fmap Right Array.reader
      in Stream.unfoldMany (Unfold.either leftRdr rightRdr) output
@@ -667,25 +665,25 @@ toBytes path args =
 -- of @Word8@.
 --
 -- >>> :{
---   toChunks' "bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
+--   toChunksEither "bash" ["-c", "echo 'hello'; echo 'world' 1>&2"]
 -- & Stream.fold (Fold.partition Stdio.writeErrChunks Stdio.writeChunks)
 -- :}
 -- world
 -- hello
 -- ((),())
 --
--- >>> toChunks' = toChunks'With id
+-- >>> toChunksEither = toChunksEitherWith id
 --
--- Prefer 'toChunks' over 'toBytes' when performance matters.
+-- Prefer 'toChunksEither over 'toBytesEither when performance matters.
 --
 -- /Pre-release/
-{-# INLINE toChunks' #-}
-toChunks' ::
+{-# INLINE toChunksEither #-}
+toChunksEither ::
     (MonadAsync m, MonadCatch m)
     => FilePath             -- ^ Executable name or path
     -> [String]             -- ^ Arguments
     -> Stream m (Either (Array Word8) (Array Word8))    -- ^ Output Stream
-toChunks' = toChunks'With id
+toChunksEither = toChunksEitherWith id
 
 -- | The following code is equivalent to the shell command @echo "hello
 -- world"@:

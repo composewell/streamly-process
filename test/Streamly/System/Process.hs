@@ -34,7 +34,7 @@ import qualified Streamly.System.Process as Proc
 
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
 import qualified Streamly.Internal.System.Process as Proc
-    (pipeChunks', pipeBytes', toChunks', toBytes')
+    (pipeChunksEither, pipeBytesEither, toChunksEither, toBytesEither)
 
 newtype SimpleError = SimpleError String
     deriving Show
@@ -142,7 +142,7 @@ toBytes1 =
         monadicIO $ do
             catBinary <- run $ which "cat"
             let
-                genStrm = S.catRights $ Proc.toBytes' catBinary [charFile]
+                genStrm = S.catRights $ Proc.toBytesEither catBinary [charFile]
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
@@ -162,7 +162,7 @@ toBytes2 = monadicIO $ run checkFailAction
 
     action = do
         S.fold Fold.drain $
-             Proc.toBytes' interpreterFile [interpreterArg, executableFileFail]
+             Proc.toBytesEither interpreterFile [interpreterArg, executableFileFail]
         return False
 
     failAction (ProcessFailure exitCode) =
@@ -180,7 +180,7 @@ toChunks1 =
         monadicIO $ do
             catBinary <- run $ which "cat"
             let
-                genStrm = S.catRights $ Proc.toChunks' catBinary [charFile]
+                genStrm = S.catRights $ Proc.toChunksEither catBinary [charFile]
 
                 ioByteStrm = do
                     handle <- openFile charFile ReadMode
@@ -200,7 +200,7 @@ toChunks2 = monadicIO $ run checkFailAction
 
     action = do
         S.fold Fold.drain $
-             Proc.toChunks' interpreterFile [interpreterArg, executableFileFail]
+             Proc.toChunksEither interpreterFile [interpreterArg, executableFileFail]
         return False
 
     failAction (ProcessFailure exitCode) =
@@ -330,14 +330,14 @@ processChunksInputFailure = monadicIO $ run $ catch runProcess checkException
 
     checkException (SimpleError err) = return (err == failErrorMessage)
 
-pipeBytes'1 :: Property
-pipeBytes'1 =
+pipeBytesEither1 :: Property
+pipeBytesEither1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             trBinary <- run $ which "tr"
             let
                 inputStream = S.fromList ls
-                genStrm = S.catRights $ Proc.pipeBytes'
+                genStrm = S.catRights $ Proc.pipeBytesEither
                             trBinary
                             ["[a-z]", "[A-Z]"]
                             inputStream
@@ -347,14 +347,14 @@ pipeBytes'1 =
             charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
-pipeBytes'2 :: Property
-pipeBytes'2 =
+pipeBytesEither2 :: Property
+pipeBytesEither2 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             let
                 inputStream = S.fromList ls
                 outStream = S.catLefts $
-                    Proc.pipeBytes'
+                    Proc.pipeBytesEither
                     interpreterFile
                     [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
                     inputStream
@@ -365,13 +365,13 @@ pipeBytes'2 =
             charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
-pipeBytes'3 :: Property
-pipeBytes'3 = monadicIO $ run checkFailAction
+pipeBytesEither3 :: Property
+pipeBytesEither3 = monadicIO $ run checkFailAction
     where
 
     action = do
         S.fold Fold.drain $
-            Proc.pipeBytes'
+            Proc.pipeBytesEither
                 interpreterFile [interpreterArg, executableFileFail] S.nil
         return False
 
@@ -380,13 +380,13 @@ pipeBytes'3 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-pipeBytes'4 :: Property
-pipeBytes'4 = monadicIO $ run checkFailAction
+pipeBytesEither4 :: Property
+pipeBytesEither4 = monadicIO $ run checkFailAction
     where
 
     action = do
         S.fold Fold.drain $
-            Proc.pipeBytes'
+            Proc.pipeBytesEither
             interpreterFile
             [interpreterArg, executableFilePass]
             (S.nilM $ throwM (SimpleError failErrorMessage))
@@ -397,8 +397,8 @@ pipeBytes'4 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-pipeChunks'1 :: Property
-pipeChunks'1 =
+pipeChunksEither1 :: Property
+pipeChunksEither1 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             trBinary <- run $ which "tr"
@@ -406,7 +406,7 @@ pipeChunks'1 =
                 inputStream = S.fromList ls
 
                 genStrm = concatArr $ S.catRights $
-                    Proc.pipeChunks'
+                    Proc.pipeChunksEither
                     trBinary
                     ["[a-z]", "[A-Z]"]
                     (S.chunksOf arrayChunkSize inputStream)
@@ -417,14 +417,14 @@ pipeChunks'1 =
             charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
-pipeChunks'2 :: Property
-pipeChunks'2 =
+pipeChunksEither2 :: Property
+pipeChunksEither2 =
     forAll (listOf (choose(_a, _z))) $ \ls ->
         monadicIO $ do
             let
                 inputStream = S.fromList ls
                 outStream = concatArr $ S.catLefts $
-                    Proc.pipeChunks'
+                    Proc.pipeChunksEither
                     interpreterFile
                     [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
                     (S.chunksOf arrayChunkSize inputStream)
@@ -435,12 +435,12 @@ pipeChunks'2 =
             charList <- run $ S.fold Fold.toList charUpperStrm
             listEquals (==) genList charList
 
-pipeChunks'3 :: Property
-pipeChunks'3 = monadicIO $ run checkFailAction
+pipeChunksEither3 :: Property
+pipeChunksEither3 = monadicIO $ run checkFailAction
     where
 
     action = do
-        S.fold Fold.drain $ Proc.pipeChunks'
+        S.fold Fold.drain $ Proc.pipeChunksEither
             interpreterFile  [interpreterArg, executableFileFail] S.nil
         return False
 
@@ -449,13 +449,13 @@ pipeChunks'3 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-pipeChunks'4 :: Property
-pipeChunks'4 = monadicIO $ run checkFailAction
+pipeChunksEither4 :: Property
+pipeChunksEither4 = monadicIO $ run checkFailAction
     where
 
     action = do
         S.fold Fold.drain $
-            Proc.pipeChunks'
+            Proc.pipeChunksEither
             interpreterFile
             [interpreterArg, executableFilePass]
             (S.nilM $ throwM (SimpleError failErrorMessage))
@@ -484,15 +484,15 @@ main = do
             --
             -- Keep the tests in dependency order so that we test the basic
             -- things first.
-            describe "pipeChunks'" $ do
+            describe "pipeChunksEither" $ do
                 prop
-                    "concatArr $ pipeChunks' tr = map toUpper"
-                    pipeChunks'1
+                    "concatArr $ pipeChunksEither tr = map toUpper"
+                    pipeChunksEither1
                 prop
-                    "error stream of pipeChunks' tr = map toUpper"
-                    pipeChunks'2
-                prop "pipeChunks' on failing executable" pipeChunks'3
-                prop "pipeChunks' using error stream" pipeChunks'4
+                    "error stream of pipeChunksEither tr = map toUpper"
+                    pipeChunksEither2
+                prop "pipeChunksEither on failing executable" pipeChunksEither3
+                prop "pipeChunksEither using error stream" pipeChunksEither4
 
             describe "processChunks" $ do
                 prop "consumeAllInput" processChunksConsumeAllInput
@@ -501,13 +501,13 @@ main = do
                 prop "inputFailure" processChunksInputFailure
 
             -- based on processChunks
-            describe "pipeBytes'" $ do
-                prop "pipeBytes' tr = map toUpper" pipeBytes'1
+            describe "pipeBytesEither" $ do
+                prop "pipeBytesEither tr = map toUpper" pipeBytesEither1
                 prop
-                    "error stream of pipeBytes' tr = map toUpper"
-                    pipeBytes'2
-                prop "pipeBytes' on failing executable" pipeBytes'3
-                prop "pipeBytes' using error stream" pipeBytes'4
+                    "error stream of pipeBytesEither tr = map toUpper"
+                    pipeBytesEither2
+                prop "pipeBytesEither on failing executable" pipeBytesEither3
+                prop "pipeBytesEither using error stream" pipeBytesEither4
 
             describe "pipeBytes" $ do
                 prop "pipeBytes tr = map toUpper" pipeBytes1
@@ -515,10 +515,10 @@ main = do
                 prop "pipeBytes using error stream" pipeBytes3
 
             -- Based on pipeBytes/Chunks
-            describe "toChunks'" $ do
-                prop "toChunks' cat = FH.toChunks" toChunks1
-                prop "toChunks' on failing executable" toChunks2
+            describe "toChunksEither" $ do
+                prop "toChunksEither cat = FH.toChunks" toChunks1
+                prop "toChunksEither on failing executable" toChunks2
 
-            describe "toBytes'" $ do
-                prop "toBytes' cat = FH.toBytes" toBytes1
-                prop "toBytes' on failing executable" toBytes2
+            describe "toBytesEither" $ do
+                prop "toBytesEither cat = FH.toBytes" toBytes1
+                prop "toBytesEither on failing executable" toBytes2
