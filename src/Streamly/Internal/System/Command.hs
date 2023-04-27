@@ -67,6 +67,16 @@ import qualified Streamly.Internal.System.Process as Process
 -- >>> import qualified Streamly.Internal.Console.Stdio as Stdio
 -- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
 
+-- Posix compliant quote excaping:
+--
+-- $ echo 'hello\\"world'
+-- hello\\"world
+--
+-- $ echo "hello\"\\w\'orld"
+-- hello"\w\'orld
+--
+-- $ echo 'hello\'
+-- hello\
 {-# INLINE quotedWord #-}
 quotedWord :: MonadCatch m => Parser Char m String
 quotedWord =
@@ -75,7 +85,15 @@ quotedWord =
                 '"' -> Just x
                 '\'' -> Just x
                 _ -> Nothing
-        trEsc q x = if q == x then Just x else Nothing
+        -- Inside ",
+        -- * \\ is translated to \
+        -- * \" is translated to "
+        trEsc '"' x =
+            case x of
+                '\\' -> Just '\\'
+                '"' -> Just '"'
+                _ -> Nothing
+        trEsc _ _ = Nothing
      in Parser.wordWithQuotes False trEsc '\\' toRQuote isSpace Fold.toList
 
 -- | A modifier for stream generation APIs in "Streamly.System.Process" to
