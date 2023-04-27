@@ -29,6 +29,7 @@ module Streamly.Internal.System.Command
     , pipeChunks
 
     -- * Helpers
+    , quotedWord
     , runWith
     , streamWith
     , pipeWith

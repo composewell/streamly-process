@@ -16,7 +16,7 @@ import Streamly.System.Process (ProcessFailure (..))
 import System.Directory (removeFile, findExecutable, doesFileExist)
 import System.Exit (exitSuccess)
 import System.IO (IOMode(..), openFile, hClose)
-import Test.Hspec (hspec, describe)
+import Test.Hspec (describe, hspec, it, shouldBe)
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
     ( forAll
@@ -31,10 +31,12 @@ import qualified Streamly.Data.Array as Array
 import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Stream as S
 import qualified Streamly.System.Process as Proc
+import qualified Streamly.Data.Stream as Stream
 
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
 import qualified Streamly.Internal.System.Process as Proc
     (pipeChunksEither, pipeBytesEither, toChunksEither, toBytesEither)
+import qualified Streamly.Internal.System.Command as Cmd (quotedWord)
 
 newtype SimpleError = SimpleError String
     deriving Show
@@ -466,6 +468,14 @@ pipeChunksEither4 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
+quotedWordTest :: String -> [String] -> IO ()
+quotedWordTest inp expected = do
+    res <-
+        Stream.fold Fold.toList
+            $ Stream.catRights
+            $ Stream.parseMany Cmd.quotedWord $ Stream.fromList inp
+    res `shouldBe` expected
+
 main :: IO ()
 main = do
     -- Nix does not have "/usr/bin/env", so the execution of test executables
@@ -522,3 +532,15 @@ main = do
             describe "toBytesEither" $ do
                 prop "toBytesEither cat = FH.toBytes" toBytes1
                 prop "toBytesEither on failing executable" toBytes2
+
+            describe "quotedWord" $ do
+                it "Single quote test" $
+                   quotedWordTest "'hello\\\\\"world'" ["hello\\\\\"world"]
+                it "Double quote test" $
+                   quotedWordTest
+                       "\"hello\\\"\\\\w\\'orld\""
+                       ["hello\"\\w\\'orld"]
+                -- TODO: We need to let the escape character be at the end
+                -- "wordWithQuotes" needs to be fixed!
+                -- it "Double quote test" $
+                --    quotedWordTest "'hello\'" ["hello\\"]
