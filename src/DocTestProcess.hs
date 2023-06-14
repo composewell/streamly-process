@@ -11,6 +11,8 @@
 >>> import qualified Streamly.System.Process as Process
 >>> import qualified Streamly.Unicode.Stream as Unicode
 
+For APIs that have not been released yet.
+
 >>> import qualified Streamly.Internal.Console.Stdio as Stdio
 >>> import qualified Streamly.Internal.Data.Stream as Stream
 >>> import qualified Streamly.Internal.FileSystem.Dir as Dir

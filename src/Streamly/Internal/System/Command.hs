@@ -72,8 +72,8 @@ quotedWord =
                 '\'' -> Just x
                 _ -> Nothing
         -- Inside ",
-        -- * \\ is translated to \
-        -- * \" is translated to "
+        -- \\ is translated to \
+        -- \" is translated to "
         trEsc '"' x =
             case x of
                 '\\' -> Just '\\'
