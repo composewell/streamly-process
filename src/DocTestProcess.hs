@@ -1,6 +1,5 @@
 {- $setup
 
->>> :m
 >>> :set -XFlexibleContexts
 >>> :set -XScopedTypeVariables
 >>> import Data.Char (toUpper)

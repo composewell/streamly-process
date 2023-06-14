@@ -1,6 +1,5 @@
 {- $setup
 
->>> :m
 >>> :set -XFlexibleContexts
 >>> :set -XQuasiQuotes
 >>> import Data.Char (toUpper)
