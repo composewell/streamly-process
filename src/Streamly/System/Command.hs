@@ -16,6 +16,8 @@
 --
 -- See also: "Streamly.Internal.System.Command".
 --
+{-# LANGUAGE CPP #-}
+
 module Streamly.System.Command
     (
     -- * Setup
@@ -58,23 +60,7 @@ import Streamly.Internal.System.Process (ProcessFailure (..))
 
 -- Keep it synced with the Internal module
 
--- $setup
--- >>> :set -XFlexibleContexts
--- >>> :set -XQuasiQuotes
--- >>> import Data.Char (toUpper)
--- >>> import Data.Function ((&))
--- >>> import Streamly.Unicode.String (str)
--- >>> import qualified Streamly.Data.Array as Array
--- >>> import qualified Streamly.Console.Stdio as Stdio
--- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Data.Stream.Prelude as Stream
--- >>> import qualified Streamly.System.Command as Command
--- >>> import qualified Streamly.Unicode.Stream as Unicode
---
--- >>> import qualified Streamly.Internal.System.Process as Process
--- >>> import qualified Streamly.Internal.Console.Stdio as Stdio
--- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
-
+#include "DocTestCommand.hs"
 -- Note: Commands are not executed using shell
 --
 -- You can use this module to execute system commands and compose them with

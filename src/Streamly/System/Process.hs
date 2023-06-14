@@ -14,6 +14,8 @@
 --
 -- See also: "Streamly.Internal.System.Process" for unreleased functions.
 --
+{-# LANGUAGE CPP #-}
+
 module Streamly.System.Process
     (
     -- * Setup
@@ -71,20 +73,7 @@ where
 
 import Streamly.Internal.System.Process
 
--- $setup
--- >>> :set -XFlexibleContexts
--- >>> :set -XScopedTypeVariables
--- >>> import Data.Char (toUpper)
--- >>> import Data.Function ((&))
--- >>> import qualified Streamly.Console.Stdio as Stdio
--- >>> import qualified Streamly.Data.Array as Array
--- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Data.Stream.Prelude as Stream
--- >>> import qualified Streamly.System.Process as Process
--- >>> import qualified Streamly.Unicode.Stream as Unicode
---
--- >>> import qualified Streamly.Internal.FileSystem.Dir as Dir
--- >>> import qualified Streamly.Internal.Data.Stream as Stream
+#include "DocTestProcess.hs"
 
 -- $overview
 --
