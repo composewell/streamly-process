@@ -38,8 +38,10 @@ formatSpace = foldr go ""
 
 -- | Replace a newline by a space and convert multiple spaces to single space
 --
+-- >>> :set -XQuasiQuotes
+-- >>> import Streamly.Internal.System
 -- >>> trim "  abc   \n   bbb  \n  ccc  "
--- "abc bbb ccc"
+-- " abc bbb ccc "
 --
 trim :: String -> String
 trim = formatSpace <$> (unwords . fmap formatSpace . lines)
