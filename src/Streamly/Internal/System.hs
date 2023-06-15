@@ -9,7 +9,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Streamly.Internal.System
-(cmd)
+( cmd
+, trim
+)
 where
 
 import Control.Applicative (Alternative(..))
