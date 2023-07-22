@@ -86,8 +86,10 @@ library
   include-dirs: src
   hs-source-dirs: src
   exposed-modules:
+
     Streamly.System.Process
     Streamly.System.Command
+    Streamly.Internal.System
     Streamly.Internal.System.Process
     Streamly.Internal.System.Command
   if flag (use-native) && !os(windows)
@@ -99,6 +101,8 @@ library
     -- Uses internal APIs
     , streamly          == 0.9.0.*
     , streamly-core     == 0.1.0
+    , template-haskell  >= 2.14  && < 2.21
+
   if !flag(use-native)
     build-depends: process >= 1.0 && < 1.7
   else
