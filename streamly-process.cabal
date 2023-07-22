@@ -30,6 +30,8 @@ extra-source-files:
   NOTICE
   README.md
   design/proposal.md
+  src/DocTestCommand.hs
+  src/DocTestProcess.hs
   test/data/failExec.bat
   test/data/failExec.sh
   test/data/passExec.bat
@@ -81,6 +83,7 @@ common optimization-options
 
 library
   import: compile-options, optimization-options
+  include-dirs: src
   hs-source-dirs: src
   exposed-modules:
     Streamly.System.Process

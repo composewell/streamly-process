@@ -170,17 +170,7 @@ import qualified Streamly.Internal.FileSystem.Handle
 import qualified Streamly.Unicode.Stream as Unicode
 import qualified Streamly.Internal.Unicode.Stream as Unicode (lines)
 
--- $setup
--- >>> :set -XFlexibleContexts
--- >>> import Data.Char (toUpper)
--- >>> import Data.Function ((&))
--- >>> import qualified Streamly.Internal.Console.Stdio as Stdio
--- >>> import qualified Streamly.Data.Fold as Fold
--- >>> import qualified Streamly.Data.Stream.Prelude as Stream
--- >>> import qualified Streamly.Internal.System.Process as Process
--- >>> import qualified Streamly.Unicode.Stream as Unicode
--- >>> import qualified Streamly.Internal.Data.Stream as Stream
--- >>> import qualified Streamly.Internal.Unicode.Stream as Unicode
+#include "DocTestProcess.hs"
 
 -------------------------------------------------------------------------------
 -- Config
