@@ -58,20 +58,34 @@ jobs:
       matrix:
         include:
 
-          - name: 9.2.7-doctest
-            ghc_version: 9.2.7
+          - name: 9.8.1-Werror+doctest
+            ghc_version: 9.8.1
             build: cabal-v2
             runner: ubuntu-latest
-            cabal-version: 3.6
+            cabal-version: 3.10.1.0
             doctest: "y"
-            cabal_project: cabal.project.user
+            cabal_project: cabal.project.d/master-Werror
 
-          - name: 9.4.4+Werror
+          - name: 9.6.3-macos
+            ghc_version: 9.6.3
+            build: cabal-v2
+            runner: macos-latest
+            cabal-version: 3.10.1.0
+            cabal_project: cabal.project.d/master
+
+          - name: 9.4.4-streamly-0.9.0
             ghc_version: 9.4.4
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.8.1.0
-            cabal_project: cabal.project.Werror
+            cabal_project: cabal.project.d/streamly-0.9.0
+
+          - name: 9.4.4-streamly-0.10.0
+            ghc_version: 9.4.4
+            build: cabal-v2
+            runner: ubuntu-latest
+            cabal-version: 3.8.1.0
+            cabal_project: cabal.project.d/streamly-0.10.0
 
           - name: 9.2.7+fusion-plugin
             ghc_version: 9.2.7
@@ -79,42 +93,35 @@ jobs:
             runner: ubuntu-latest
             cabal-build-options: --flag fusion-plugin
             cabal-version: 3.6
-            cabal_project: cabal.project.user
+            cabal_project: cabal.project.d/master
 
           - name: 9.0.2
             ghc_version: 9.0.2
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
-            cabal_project: cabal.project.user
-
-          - name: 8.10.7
-            ghc_version: 8.10.7
-            build: cabal-v2
-            runner: ubuntu-latest
-            cabal-version: 3.2
-            cabal_project: cabal.project.user
+            cabal_project: cabal.project.d/master
 
           - name: 8.10.7+macOS
             ghc_version: 8.10.7
             build: cabal-v2
             runner: macos-latest
             cabal-version: 3.2
-            cabal_project: cabal.project.user
+            cabal_project: cabal.project.d/master
 
           - name: 8.8.4
             ghc_version: 8.8.4
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
-            cabal_project: cabal.project.user
+            cabal_project: cabal.project.d/master
 
           - name: 8.6.5
             ghc_version: 8.6.5
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
-            cabal_project: cabal.project.user
+            cabal_project: cabal.project.d/master
 
           - name: hlint
             ghc_version: 8.10.7
@@ -123,7 +130,7 @@ jobs:
             hlint_targets: "src test Benchmark"
             runner: ubuntu-latest
             cabal-version: 3.2
-            cabal_project: cabal.project.user
+            cabal_project: cabal.project.d/master
 
     steps:
     - uses: actions/checkout@v2
@@ -166,7 +173,7 @@ jobs:
           rm -f cabal-docspec.xz
           chmod a+x $HOME/.cabal/bin/cabal-docspec
           cabal update
-          cabal build all --project-file cabal.project.user
+          cabal build all --project-file cabal.project.d/master
           $HOME/.cabal/bin/cabal-docspec --version
           $HOME/.cabal/bin/cabal-docspec --timeout 60
         else

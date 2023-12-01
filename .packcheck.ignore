@@ -4,8 +4,9 @@
 .hlint.yaml
 hie.yaml
 appveyor.yml
-cabal.project.Werror
 default.nix
 stack.yaml
-cabal.project
-cabal.project.user
+cabal.project.d/master
+cabal.project.d/master-Werror
+cabal.project.d/streamly-0.9.0
+cabal.project.d/streamly-0.10.0
