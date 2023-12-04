@@ -58,12 +58,11 @@ jobs:
       matrix:
         include:
 
-          - name: 9.8.1-Werror+doctest
+          - name: 9.8.1-Werror
             ghc_version: 9.8.1
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.10.1.0
-            doctest: "y"
             cabal_project: cabal.project.d/master-Werror
 
           - name: 9.6.3-macos
@@ -95,11 +94,12 @@ jobs:
             cabal-version: 3.6
             cabal_project: cabal.project.d/master
 
-          - name: 9.0.2
+          - name: 9.0.2+doctest
             ghc_version: 9.0.2
             build: cabal-v2
             runner: ubuntu-latest
             cabal-version: 3.2
+            doctest: "y"
             cabal_project: cabal.project.d/master
 
           - name: 8.10.7+macOS
