@@ -53,7 +53,7 @@ import qualified Streamly.Internal.System.Process as Process
 
 #include "DocTestCommand.hs"
 
--- Posix compliant quote excaping:
+-- | Posix compliant quote escaping:
 --
 -- $ echo 'hello\\"world'
 -- hello\\"world
@@ -169,7 +169,7 @@ pipeWith f cmd input =
 -- If the input stream throws an exception or if the output stream is garbage
 -- collected before it could finish then the process is terminated with SIGTERM.
 --
--- If the process terminates with a non-zero exit code then a 'ProcessFailure'
+-- If the process terminates with a non-zero exit code then a 'Process.ProcessFailure'
 -- exception is raised.
 --
 -- The following code is equivalent to the shell command @echo "hello world" |

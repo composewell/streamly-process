@@ -14,7 +14,7 @@
 
 For APIs that have not been released yet.
 
->>> import qualified Streamly.Internal.Console.Stdio as Stdio
->>> import qualified Streamly.Internal.FileSystem.Dir as Dir
+>>> import qualified Streamly.Internal.Console.Stdio as Stdio (putBytes, putChars, putChunks)
+>>> import qualified Streamly.Internal.FileSystem.Dir as Dir (readFiles)
 >>> import qualified Streamly.Internal.System.Process as Process
 -}
