@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 (Dec 2023)
+
+* Allow streamly-0.10.0 and streamly-core-0.2.0
+* Fix a bug in quote escaping in the Command module
+
 ## 0.3.0 (Apr 2023)
 
 * Added a `Streamly.System.Command` module

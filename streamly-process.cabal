@@ -1,6 +1,6 @@
 cabal-version:       2.2
 name:                streamly-process
-version:             0.3.0
+version:             0.3.1
 synopsis:            Use OS processes as stream transformation functions
 description:
   Use operating system (OS) commands in Haskell programs as if they were
