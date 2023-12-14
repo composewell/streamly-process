@@ -94,12 +94,36 @@ module Streamly.System.Command
     --
     -- $setup
 
-    -- * Types
-      ProcessFailure (..)
+    -- * Exceptions
+      Process.ProcessFailure (..)
+
+    -- * Process Configuration
+    -- | Use the config modifiers to modify the default config.
+    , Process.Config
+
+    -- ** Common Modifiers
+    -- | These options apply to both POSIX and Windows.
+    , Process.setCwd
+    , Process.setEnv
+    , Process.closeFiles
+    , Process.newProcessGroup
+    , Process.Session (..)
+    , Process.setSession
+
+    -- ** Posix Only Modifiers
+    -- | These options have no effect on Windows.
+    , Process.interruptChildOnly
+    , Process.setUserId
+    , Process.setGroupId
+
+    -- ** Windows Only Modifiers
+    -- | These options have no effect on Posix.
+    , Process.waitForDescendants
 
     -- * Generation
     , toBytes
     , toChunks
+    , toChunksWith
     , toChars
     , toLines
 
@@ -109,9 +133,27 @@ module Streamly.System.Command
     , toNull
 
     -- * Transformation
+    , pipeChunks
+    , pipeChunksWith
     , pipeBytes
     , pipeChars
-    , pipeChunks
+
+    -- -- * Including Stderr Stream
+    -- | Like other "Generation" routines but along with stdout, stderr is also
+    -- included in the output stream. stdout is converted to 'Right' values in
+    -- the output stream and stderr is converted to 'Left' values.
+    -- , toBytesEither
+    -- , toChunksEither
+    -- , toChunksEitherWith
+    -- , pipeBytesEither
+    -- , pipeChunksEither
+    -- , pipeChunksEitherWith
+
+    -- * Non-streaming Processes
+    -- | These processes do not attach the IO streams with other processes.
+    , foreground
+    , daemon
+    , standalone
 
     -- -- * Helpers
     -- , runWith
@@ -121,7 +163,7 @@ module Streamly.System.Command
 where
 
 import Streamly.Internal.System.Command
-import Streamly.Internal.System.Process (ProcessFailure (..))
+import qualified Streamly.Internal.System.Process as Process -- (ProcessFailure (..))
 
 -- Keep it synced with the Internal module
 

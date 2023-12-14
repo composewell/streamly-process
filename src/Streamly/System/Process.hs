@@ -123,6 +123,8 @@ module Streamly.System.Process
     , toBytes
     , toChars
     , toLines
+
+    -- * Effects
     , toString
     , toStdout
     , toNull

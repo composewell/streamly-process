@@ -15,6 +15,7 @@ module Streamly.Internal.System.Command
     -- * Generation
       toBytes
     , toChunks
+    , toChunksWith
     , toChars
     , toLines
 
@@ -27,6 +28,12 @@ module Streamly.Internal.System.Command
     , pipeBytes
     , pipeChars
     , pipeChunks
+    , pipeChunksWith
+
+    -- * Standalone Processes
+    , standalone
+    , foreground
+    , daemon
 
     -- * Helpers
     , quotedWord
@@ -43,6 +50,9 @@ import Streamly.Data.Array (Array)
 import Streamly.Data.Fold (Fold)
 import Streamly.Data.Parser (Parser)
 import Streamly.Data.Stream.Prelude (MonadAsync, Stream)
+import Streamly.Internal.System.Process (Config)
+import System.Exit (ExitCode(..))
+import System.Process (ProcessHandle)
 
 import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Parser as Parser
@@ -157,6 +167,15 @@ pipeWith f cmd input =
             y:ys -> return $ f y ys input
             _ -> error "streamWith: empty command"
 
+-- | Like 'pipeChunks' but use the specified configuration to run the process.
+{-# INLINE pipeChunksWith #-}
+pipeChunksWith ::
+    (MonadCatch m, MonadAsync m)
+    => (Config -> Config)      -- ^ Config modifier
+    -> String                  -- ^ Command
+    -> Stream m (Array Word8)  -- ^ Input stream
+    -> Stream m (Array Word8)  -- ^ Output stream
+pipeChunksWith modifier = pipeWith (Process.pipeChunksWith modifier)
 
 -- | @pipeChunks command input@ runs the executable with arguments specified by
 -- @command@ and supplying @input@ stream as its standard input.  Returns the
@@ -241,6 +260,15 @@ pipeChars = pipeWith Process.pipeChars
 toBytes :: (MonadAsync m, MonadCatch m) => String -> Stream m Word8
 toBytes = streamWith Process.toBytes
 
+-- | Like 'toChunks' but use the specified configuration to run the process.
+{-# INLINE toChunksWith #-}
+toChunksWith ::
+    (MonadCatch m, MonadAsync m)
+    => (Config -> Config)     -- ^ Config modifier
+    -> String                 -- ^ Command
+    -> Stream m (Array Word8) -- ^ Output stream
+toChunksWith modifier = streamWith (Process.toChunksWith modifier)
+
 -- >>> toChunks = streamWith Process.toChunks
 
 -- |
@@ -318,3 +346,62 @@ toNull ::
     => String -- ^ Command
     -> m ()
 toNull = runWith Process.toNull
+
+-------------------------------------------------------------------------------
+-- Processes not interacting with the parent process
+-------------------------------------------------------------------------------
+
+-- | Launch a standlone process i.e. the process does not have a way to attach
+-- the IO streams with other processes. The IO streams stdin, stdout, stderr
+-- can either be inherited from the parent or closed.
+--
+-- This API is more powerful than 'interactive' and 'daemon' and can be used to
+-- implement both of these. However, it should be used carefully e.g. if you
+-- inherit the IO streams and parent is not waiting for the child process to
+-- finish then both parent and child may use the IO streams resulting in
+-- garbled IO if both are reading/writing simultaneously.
+--
+-- If the parent chooses to wait for the process an 'ExitCode' is returned
+-- otherwise a 'ProcessHandle' is returned which can be used to terminate the
+-- process, send signals to it or wait for it to finish.
+{-# INLINE standalone #-}
+standalone ::
+       Bool -- ^ Wait for process to finish?
+    -> (Bool, Bool, Bool) -- ^ close (stdin, stdout, stderr)
+    -> (Config -> Config)
+    -> String -- ^ Command
+    -> IO (Either ExitCode ProcessHandle)
+standalone wait streams modCfg =
+    runWith (Process.standalone wait streams modCfg)
+
+-- | Launch a process interfacing with the user. User interrupts are sent to
+-- the launched process and ignored by the parent process. The launched process
+-- inherits stdin, stdout, and stderr from the parent, so that the user can
+-- interact with the process. The parent waits for the child process to exit,
+-- an 'ExitCode' is returned when the process finishes.
+--
+-- This is the same as the common @system@ function found in other libraries
+-- used to execute commands.
+--
+-- On Windows you can pass @setSession NewConsole@ to create a new console.
+--
+{-# INLINE foreground #-}
+foreground ::
+       (Config -> Config)
+    -> String -- ^ Command
+    -> IO ExitCode
+foreground modCfg = runWith (Process.foreground modCfg)
+
+-- | Launch a daemon process. Closes stdin, stdout and stderr, creates a new
+-- session, detached from the terminal, the parent does not wait for the
+-- process to finish.
+--
+-- The 'ProcessHandle' returned can be used to terminate the daemon or send
+-- signals to it.
+--
+{-# INLINE daemon #-}
+daemon ::
+       (Config -> Config)
+    -> String -- ^ Command
+    -> IO ProcessHandle
+daemon modCfg = runWith (Process.daemon modCfg)
