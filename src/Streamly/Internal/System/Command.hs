@@ -224,10 +224,9 @@ pipeChars = pipeWith Process.pipeChars
 -- Generation
 -------------------------------------------------------------------------------
 
--- |
---
 -- >>> toBytes = streamWith Process.toBytes
---
+
+-- |
 -- >>> toBytes "echo hello world" & Stdio.putBytes
 --hello world
 -- >>> toBytes "echo hello\\ world" & Stdio.putBytes
@@ -242,10 +241,9 @@ pipeChars = pipeWith Process.pipeChars
 toBytes :: (MonadAsync m, MonadCatch m) => String -> Stream m Word8
 toBytes = streamWith Process.toBytes
 
--- |
---
 -- >>> toChunks = streamWith Process.toChunks
---
+
+-- |
 -- >>> toChunks "echo hello world" & Stdio.putChunks
 --hello world
 --
@@ -254,9 +252,9 @@ toBytes = streamWith Process.toBytes
 toChunks :: (MonadAsync m, MonadCatch m) => String -> Stream m (Array Word8)
 toChunks = streamWith Process.toChunks
 
--- |
 -- >>> toChars = streamWith Process.toChars
---
+
+-- |
 -- >>> toChars "echo hello world" & Stdio.putChars
 --hello world
 --
@@ -265,9 +263,9 @@ toChunks = streamWith Process.toChunks
 toChars :: (MonadAsync m, MonadCatch m) => String -> Stream m Char
 toChars = streamWith Process.toChars
 
--- |
 -- >>> toLines f = streamWith (Process.toLines f)
---
+
+-- |
 -- >>> toLines Fold.toList "echo -e hello\\\\nworld" & Stream.fold Fold.toList
 -- ["hello","world"]
 --
@@ -280,9 +278,9 @@ toLines ::
     -> Stream m a -- ^ Output Stream
 toLines f = streamWith (Process.toLines f)
 
--- |
 -- >>> toString = runWith Process.toString
---
+
+-- |
 -- >>> toString "echo hello world"
 --"hello world\n"
 --
@@ -294,9 +292,9 @@ toString ::
     -> m String
 toString = runWith Process.toString
 
--- |
 -- >>> toStdout = runWith Process.toStdout
---
+
+-- |
 -- >>> toStdout "echo hello world"
 -- hello world
 --
@@ -308,9 +306,9 @@ toStdout ::
     -> m ()
 toStdout = runWith Process.toStdout
 
--- |
 -- >>> toNull = runWith Process.toNull
---
+
+-- |
 -- >>> toNull "echo hello world"
 --
 -- /Pre-release/

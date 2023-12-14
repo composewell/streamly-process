@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Streamly.System.Process
 -- Copyright   : (c) 2020 Composewell Technologies
@@ -6,15 +7,77 @@
 -- Stability   : experimental
 -- Portability : GHC
 --
--- Use OS processes just like native Haskell functions - to generate, transform
--- or consume streams.
+-- This module provides functions to run operating system processes as stream
+-- producers, consumers or stream transformation functions. Thus OS processes
+-- can be used in the same way as Haskell functions and all the streaming
+-- combinators in streamly can be used to combine them. This allows you to
+-- seamlessly integrate external binary executables into your Haskell program.
 --
--- See "Streamly.System.Command" module for a higher level wrapper over this
+-- However, we recommend native Haskell functions with Streamly threads over
+-- using system processes whenever possible. This approach offers a simpler
+-- programming model compared to system processes, which also have a larger
+-- performance overhead.
+--
+-- Prefer "Streamly.System.Command" module as a higher level wrapper over this
 -- module.
 --
--- See also: "Streamly.Internal.System.Process" for unreleased functions.
+-- = Executables as functions
 --
-{-# LANGUAGE CPP #-}
+-- Processes can be composed in a streaming pipeline just like a Posix shell
+-- command pipeline. Moreover, we can mix processes and Haskell functions
+-- seamlessly in a processing pipeline. For example:
+--
+-- >>> :{
+--    Process.toBytes "echo" ["hello world"]
+--  & Process.pipeBytes "tr" ["[a-z]", "[A-Z]"]
+--  & Stream.fold Stdio.write
+--  :}
+--  HELLO WORLD
+--
+-- Of course, you can use a Haskell function instead of "tr":
+--
+-- >>> :{
+--    Process.toBytes "echo" ["hello world"]
+--  & Unicode.decodeLatin1 & fmap toUpper & Unicode.encodeLatin1
+--  & Stream.fold Stdio.write
+--  :}
+--  HELLO WORLD
+--
+-- = Shell commands as functions
+--
+-- Using a shell as the command interpreter we can use shell commands in a data
+-- processing pipeline:
+--
+-- >>> :{
+--    Process.toBytes "sh" ["-c", "echo hello | tr [a-z] [A-Z]"]
+--  & Stream.fold Stdio.write
+--  :}
+--  HELLO
+--
+-- = Running Commands Concurrently
+--
+-- We can run executables or commands concurrently as we would run any other
+-- functions in Streamly. For example, the following program greps the word
+-- "to" in all the files in the current directory concurrently:
+--
+-- >>> :{
+-- grep file =
+--    Process.toBytes "grep" ["-H", "pattern", file]
+--  & Stream.handle (\(_ :: Process.ProcessFailure) -> Stream.nil)
+--  & Stream.foldMany (Fold.takeEndBy (== 10) Array.write)
+--  :}
+--
+-- >>> :{
+-- pgrep =
+--    Dir.readFiles "."
+--  & Stream.parConcatMap id grep
+--  & Stream.fold Stdio.writeChunks
+-- :}
+--
+-- = Experimental APIs
+--
+-- See "Streamly.Internal.System.Process" for unreleased functions.
+--
 
 module Streamly.System.Process
     (
@@ -23,9 +86,6 @@ module Streamly.System.Process
     -- run the following commands first.
     --
     -- $setup
-
-    -- * Overview
-    -- $overview
 
     -- * Exceptions
     -- | Since we are composing using Streamly's streaming pipeline there is
@@ -98,68 +158,3 @@ where
 import Streamly.Internal.System.Process
 
 #include "DocTestProcess.hs"
-
--- $overview
---
--- This module provides functions to run operating system processes as stream
--- source, sink or transformation functions. Thus OS processes can be used in
--- the same way as Haskell functions and all the streaming combinators in
--- streamly can be used to combine them. This allows you to seamlessly
--- integrate external programs into your Haskell program.
---
--- We recommend using Haskell functions with Streamly threads for performing
--- tasks whenever possible. This approach offers a simpler programming model
--- compared to system processes, which also have a larger performance overhead.
---
--- = Executables as functions
---
--- Processes can be composed in a streaming pipeline just like a Posix shell
--- command pipeline. Moreover, we can mix processes and Haskell functions
--- seamlessly in a processing pipeline. For example:
---
--- >>> :{
---    Process.toBytes "echo" ["hello world"]
---  & Process.pipeBytes "tr" ["[a-z]", "[A-Z]"]
---  & Stream.fold Stdio.write
---  :}
---  HELLO WORLD
---
--- Of course, you can use a Haskell function instead of "tr":
---
--- >>> :{
---    Process.toBytes "echo" ["hello world"]
---  & Unicode.decodeLatin1 & fmap toUpper & Unicode.encodeLatin1
---  & Stream.fold Stdio.write
---  :}
---  HELLO WORLD
---
--- = Shell commands as functions
---
--- Using a shell as the command interpreter we can use shell commands in a data
--- processing pipeline:
---
--- >>> :{
---    Process.toBytes "sh" ["-c", "echo hello | tr [a-z] [A-Z]"]
---  & Stream.fold Stdio.write
---  :}
---  HELLO
---
--- = Running Commands Concurrently
---
--- We can run executables or commands concurrently as we would run any other
--- functions in Streamly. For example, the following program greps the word
--- "to" in all the files in the current directory concurrently:
---
--- >>> :{
--- grep file =
---    Process.toBytes "grep" ["-H", "pattern", file]
---  & Stream.handle (\(_ :: Process.ProcessFailure) -> Stream.nil)
---  & Stream.foldMany (Fold.takeEndBy (== 10) Array.write)
---  :}
---
--- >>> :{
--- pgrep =
---    Dir.readFiles "."
---  & Stream.parConcatMap id grep
---  & Stream.fold Stdio.writeChunks
--- :}
