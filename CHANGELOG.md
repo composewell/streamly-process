@@ -4,6 +4,8 @@
 
 * Allow streamly-0.10.0 and streamly-core-0.2.0
 * Fix a bug in quote escaping in the Command module
+* Add APIs in System.Process and System.Command module with ability to set
+  process attributes.
 
 ## 0.3.0 (Apr 2023)
 
