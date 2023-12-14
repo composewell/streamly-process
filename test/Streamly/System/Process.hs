@@ -34,8 +34,6 @@ import qualified Streamly.System.Process as Proc
 import qualified Streamly.Data.Stream as Stream
 
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
-import qualified Streamly.Internal.System.Process as Proc
-    (pipeChunksEither, pipeBytesEither, toChunksEither, toBytesEither)
 import qualified Streamly.Internal.System.Command as Cmd (quotedWord)
 
 newtype SimpleError = SimpleError String

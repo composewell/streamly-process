@@ -35,35 +35,59 @@ module Streamly.System.Process
       ProcessFailure (..)
 
     -- * Process Configuration
+    -- | Use the config modifiers to modify the default config.
     , Config
 
-    {-
-    -- ** Common Config Options
+    -- ** Common Modifiers
     -- | These options apply to both POSIX and Windows.
     , setCwd
     , setEnv
     , closeFiles
     , newProcessGroup
+    , Session (..)
     , setSession
 
-    -- * Posix Only Options
+    -- ** Posix Only Modifiers
     -- | These options have no effect on Windows.
-    , parentIgnoresInterrupt
+    , interruptChildOnly
     , setUserId
     , setGroupId
 
-    -- * Windows Only Options
+    -- ** Windows Only Modifiers
     -- | These options have no effect on Posix.
-    , waitForChildTree
-    -}
+    , waitForDescendants
 
     -- * Generation
     , toChunks
+    , toChunksWith
     , toBytes
+    , toChars
+    , toLines
+    , toString
+    , toStdout
+    , toNull
 
     -- * Transformation
     , pipeChunks
+    , pipeChunksWith
     , pipeBytes
+
+    -- * Including Stderr Stream
+    -- | Like other "Generation" routines but along with stdout, stderr is also
+    -- included in the output stream. stdout is converted to 'Right' values in
+    -- the output stream and stderr is converted to 'Left' values.
+    , toBytesEither
+    , toChunksEither
+    , toChunksEitherWith
+    , pipeBytesEither
+    , pipeChunksEither
+    , pipeChunksEitherWith
+
+    -- * Non-streaming Processes
+    -- | These processes do not attach the IO streams with other processes.
+    , foreground
+    , daemon
+    , standalone
 
     -- * Deprecated
     , processChunks

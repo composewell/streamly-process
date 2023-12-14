@@ -60,17 +60,18 @@ module Streamly.Internal.System.Process
     -}
     , closeFiles
     , newProcessGroup
+    , Session (..)
     , setSession
 
     -- * Posix Only Options
     -- | These options have no effect on Windows.
-    , parentIgnoresInterrupt
+    , interruptChildOnly
     , setUserId
     , setGroupId
 
     -- * Windows Only Options
     -- | These options have no effect on Posix.
-    , waitForChildTree
+    , waitForDescendants
 
     -- * Internal
     , inheritStdin
@@ -111,11 +112,14 @@ module Streamly.Internal.System.Process
     , pipeChunksEitherWith
 
     -- * Standalone Processes
-    , standalone
-    , interactive
+    , foreground
     , daemon
+    , standalone
 
     -- * Deprecated
+    , parentIgnoresInterrupt
+    , waitForChildTree
+    , interactive
     , processBytes
     , processChunks
     )
@@ -326,7 +330,9 @@ closeFiles x (Config cfg) = Config $ cfg { close_fds = x }
 -- | If 'True' the new process starts a new process group, becomes a process
 -- group leader, its pid becoming the process group id.
 --
--- See the POSIX @setpgid@ man page.
+-- See the POSIX
+-- <https://man7.org/linux/man-pages/man2/setpgid.2.html setpgid>
+-- man page.
 --
 -- Default is 'False', the new process belongs to the parent's process group.
 newProcessGroup :: Bool -> Config -> Config
@@ -336,7 +342,9 @@ newProcessGroup x (Config cfg) = Config $ cfg { create_group = x }
 -- parent process. This is the default.
 --
 -- 'NewSession' makes the new process start with a new session without a
--- controlling terminal. On POSIX, @setsid@ is used to create a new process
+-- controlling terminal. On POSIX,
+-- <https://man7.org/linux/man-pages/man2/setsid.2.html setsid>
+-- is used to create a new process
 -- group and session, the pid of the new process is the session id and process
 -- group id as well. On Windows @DETACHED_PROCESS@ flag is used to detach the
 -- process from inherited console session.
@@ -346,10 +354,12 @@ newProcessGroup x (Config cfg) = Config $ cfg { create_group = x }
 -- nothing.
 --
 -- For Windows see
+--
 -- * https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
 -- * https://learn.microsoft.com/en-us/windows/console/creation-of-a-console .
 --
--- For POSIX see, @setsid@ man page.
+-- For POSIX see, <https://man7.org/linux/man-pages/man2/setsid.2.html setsid>
+-- man page.
 data Session =
       InheritSession -- ^ Inherit the parent session
     | NewSession -- ^ Detach process from the current session
@@ -366,11 +376,15 @@ setSession x (Config cfg) =
             NewSession -> cfg { new_session = True}
             NewConsole -> cfg {create_new_console = True}
 
--- | Use the POSIX @setuid@ call to set the user id of the new process before
+-- | Use the POSIX
+-- <https://man7.org/linux/man-pages/man2/setuid.2.html setuid>
+-- call to set the user id of the new process before
 -- executing the command. The parent process must have sufficient privileges to
 -- set the user id.
 --
--- POSIX only. See the POSIX @setuid@ man page.
+-- POSIX only. See the POSIX
+-- <https://man7.org/linux/man-pages/man2/setuid.2.html setuid>
+-- man page.
 --
 -- Default is 'Nothing' - inherit from the parent.
 setUserId :: Maybe Word32 -> Config -> Config
@@ -382,11 +396,15 @@ setUserId x (Config cfg) =
     Config $ cfg { child_user = CUid <$> x }
 #endif
 
--- | Use the POSIX @setgid@ call to set the group id of the new process before
+-- | Use the POSIX
+-- <https://man7.org/linux/man-pages/man2/setgid.2.html setgid>
+-- call to set the group id of the new process before
 -- executing the command. The parent process must have sufficient privileges to
 -- set the group id.
 --
--- POSIX only. See the POSIX @setgid@ man page.
+-- POSIX only. See the POSIX
+-- <https://man7.org/linux/man-pages/man2/setgid.2.html setgid>
+-- man page.
 --
 -- Default is 'Nothing' - inherit from the parent.
 setGroupId :: Maybe Word32 -> Config -> Config
@@ -414,15 +432,23 @@ setGroupId x (Config cfg) =
 -- until the child exits.
 --
 -- POSIX only. Default is 'False'.
-parentIgnoresInterrupt :: Bool -> Config -> Config
-parentIgnoresInterrupt x (Config cfg) = Config $ cfg { delegate_ctlc = x }
+interruptChildOnly :: Bool -> Config -> Config
+interruptChildOnly x (Config cfg) = Config $ cfg { delegate_ctlc = x }
 
--- | On Windows, the parent waits for the entire tree of process i.e. including
--- processes that are spawned by the child process.
+{-# DEPRECATED parentIgnoresInterrupt "Use interruptChildOnly instead." #-}
+parentIgnoresInterrupt :: Bool -> Config -> Config
+parentIgnoresInterrupt = interruptChildOnly
+
+-- | On Windows, the parent waits for the entire descendant tree of process
+-- i.e. including processes that are spawned by the child process.
 --
 -- Default is 'True'.
+waitForDescendants :: Bool -> Config -> Config
+waitForDescendants x (Config cfg) = Config $ cfg { use_process_jobs = x }
+
+{-# DEPRECATED waitForChildTree "Use waitForDescendants instead." #-}
 waitForChildTree :: Bool -> Config -> Config
-waitForChildTree x (Config cfg) = Config $ cfg { use_process_jobs = x }
+waitForChildTree = waitForDescendants
 
 pipeStdErr :: Config -> Config
 pipeStdErr (Config cfg) = Config $ cfg { std_err = CreatePipe }
@@ -585,6 +611,8 @@ pipeChunksWithAction run modCfg path args =
 
     alloc = createProc' modCfg path args
 
+-- | Like 'pipeChunksEither' but use the specified configuration to run the
+-- process.
 {-# INLINE pipeChunksEitherWith #-}
 pipeChunksEitherWith ::
     (MonadCatch m, MonadAsync m)
@@ -604,6 +632,8 @@ pipeChunksEitherWith modifier path args input =
             `parallel` fmap Right (toChunksClose stdoutH)
     run _ = error "pipeChunksEitherWith: Not reachable"
 
+-- | Like 'pipeChunks' but also includes stderr as 'Left' stream in the
+-- 'Either' output.
 {-# INLINE pipeChunksEither #-}
 pipeChunksEither ::
     (MonadCatch m, MonadAsync m)
@@ -647,6 +677,7 @@ pipeBytesEither path args input =
         rightRdr = fmap Right Array.reader
      in Stream.unfoldMany (Unfold.either leftRdr rightRdr) output
 
+-- | Like 'pipeChunks' but use the specified configuration to run the process.
 {-# INLINE pipeChunksWith #-}
 pipeChunksWith ::
     (MonadCatch m, MonadAsync m)
@@ -780,6 +811,8 @@ pipeChars path args input =
 -- Generation
 -------------------------------------------------------------------------------
 
+-- | Like 'toChunksEither' but use the specified configuration to run the
+-- process.
 {-# INLINE toChunksEitherWith #-}
 toChunksEitherWith ::
     (MonadCatch m, MonadAsync m)
@@ -797,6 +830,7 @@ toChunksEitherWith modifier path args =
             `parallel` fmap Right (toChunksClose stdoutH)
     run _ = error "toChunksEitherWith: Not reachable"
 
+-- | Like 'toChunks' but use the specified configuration to run the process.
 {-# INLINE toChunksWith #-}
 toChunksWith ::
     (MonadCatch m, MonadAsync m)
@@ -863,7 +897,7 @@ toBytes path args =
     let output = toChunks path args
      in Stream.unfoldMany Array.reader output
 
--- | Like 'toBytes' but generates a stream of @Array Word8@ instead of a stream
+-- | Like 'toBytesEither' but generates a stream of @Array Word8@ instead of a stream
 -- of @Word8@.
 --
 -- >>> :{
@@ -876,7 +910,7 @@ toBytes path args =
 --
 -- >>> toChunksEither = toChunksEitherWith id
 --
--- Prefer 'toChunksEither over 'toBytesEither when performance matters.
+-- Prefer 'toChunksEither' over 'toBytesEither' when performance matters.
 --
 -- /Pre-release/
 {-# INLINE toChunksEither #-}
@@ -970,9 +1004,22 @@ toNull ::
 toNull path args = toChunks path args & Stream.fold Fold.drain
 
 -------------------------------------------------------------------------------
--- Process not interacting with the parent process
+-- Processes not interacting with the parent process
 -------------------------------------------------------------------------------
 
+-- | Launch a standlone process i.e. the process does not have a way to attach
+-- the IO streams with other processes. The IO streams stdin, stdout, stderr
+-- can either be inherited from the parent or closed.
+--
+-- This API is more powerful than 'interactive' and 'daemon' and can be used to
+-- implement both of these. However, it should be used carefully e.g. if you
+-- inherit the IO streams and parent is not waiting for the child process to
+-- finish then both parent and child may use the IO streams resulting in
+-- garbled IO if both are reading/writing simultaneously.
+--
+-- If the parent chooses to wait for the process an 'ExitCode' is returned
+-- otherwise a 'ProcessHandle' is returned which can be used to terminate the
+-- process, send signals to it or wait for it to finish.
 {-# INLINE standalone #-}
 standalone ::
        Bool -- ^ Wait for process to finish?
@@ -998,22 +1045,24 @@ standalone wait (close_stdin, close_stdout, close_stderr) modCfg path args =
             s_err = if close_stderr then NoStream else Inherit
         in c {std_in = s_in, std_out = s_out, std_err = s_err}
 
--- | Inherits stdin, stdout, and stderr from the parent, so that the user can
--- interact with the process, user interrupts are handled by the child process,
--- the parent waits for the child process to exit.
+-- | Launch a process interfacing with the user. User interrupts are sent to
+-- the launched process and ignored by the parent process. The launched process
+-- inherits stdin, stdout, and stderr from the parent, so that the user can
+-- interact with the process. The parent waits for the child process to exit,
+-- an 'ExitCode' is returned when the process finishes.
 --
--- This is same as the common @system@ function found in other libraries used
--- to execute commands.
+-- This is the same as the common @system@ function found in other libraries
+-- used to execute commands.
 --
 -- On Windows you can pass @setSession NewConsole@ to create a new console.
 --
-{-# INLINE interactive #-}
-interactive ::
+{-# INLINE foreground #-}
+foreground ::
        (Config -> Config)
     -> FilePath -- ^ Executable name or path
     -> [String] -- ^ Arguments
     -> IO ExitCode
-interactive modCfg path args =
+foreground modCfg path args =
     withCreateProcess cfg (\_ _ _ p -> waitForProcess p)
 
     where
@@ -1025,11 +1074,24 @@ interactive modCfg path args =
         let Config c = modCfg1 $ mkConfig path args
         in c {std_in = Inherit, std_out = Inherit, std_err = Inherit}
 
+{-# DEPRECATED interactive "Use foreground instead." #-}
+{-# INLINE interactive #-}
+interactive ::
+       (Config -> Config)
+    -> FilePath -- ^ Executable name or path
+    -> [String] -- ^ Arguments
+    -> IO ExitCode
+interactive = foreground
+
 -- XXX ProcessHandle can be used to terminate the process. re-export
 -- terminateProcess?
 
--- | Closes stdin, stdout and stderr, creates a new session, detached from the
--- terminal, the parent does not wait for the process to finish.
+-- | Launch a daemon process. Closes stdin, stdout and stderr, creates a new
+-- session, detached from the terminal, the parent does not wait for the
+-- process to finish.
+--
+-- The 'ProcessHandle' returned can be used to terminate the daemon or send
+-- signals to it.
 --
 {-# INLINE daemon #-}
 daemon ::

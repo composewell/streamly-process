@@ -23,7 +23,6 @@ import qualified Streamly.Internal.System.Command as Cmd
 
 -- Internal imports
 import qualified Streamly.Internal.FileSystem.Handle as FH
-import qualified Streamly.Internal.System.Process as Proc
 
 -- XXX replace with streamly versions once they are fixed
 {-# INLINE rights #-}
