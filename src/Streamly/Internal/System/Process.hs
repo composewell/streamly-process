@@ -265,7 +265,7 @@ mkConfig path args = Config $ CreateProcess
 -- working directory is inherited from the parent process.
 --
 -- Default is 'Nothing' - inherited from the parent process.
-setCwd :: Maybe (FilePath) -> Config -> Config
+setCwd :: Maybe FilePath -> Config -> Config
 setCwd path (Config cfg) = Config $ cfg { cwd = path }
 
 -- | Set the environment variables for the new process. When 'Nothing', the
@@ -1007,7 +1007,9 @@ toNull path args = toChunks path args & Stream.fold Fold.drain
 -- Processes not interacting with the parent process
 -------------------------------------------------------------------------------
 
--- | Launch a standlone process i.e. the process does not have a way to attach
+-- XXX Make the return type ExitCode/ProcessHandle depend on the wait argument?
+
+-- | Launch a standalone process i.e. the process does not have a way to attach
 -- the IO streams with other processes. The IO streams stdin, stdout, stderr
 -- can either be inherited from the parent or closed.
 --
@@ -1035,7 +1037,7 @@ standalone wait (close_stdin, close_stdout, close_stderr) modCfg path args =
 
     postCreate _ _ _ procHandle =
         if wait
-        then fmap Left $ waitForProcess procHandle
+        then Left <$> waitForProcess procHandle
         else return $ Right procHandle
 
     cfg =
@@ -1063,16 +1065,13 @@ foreground ::
     -> [String] -- ^ Arguments
     -> IO ExitCode
 foreground modCfg path args =
-    withCreateProcess cfg (\_ _ _ p -> waitForProcess p)
-
-    where
-
-    -- let child handle SIGINT/QUIT
-    modCfg1 = (parentIgnoresInterrupt True . modCfg)
-
-    cfg =
-        let Config c = modCfg1 $ mkConfig path args
-        in c {std_in = Inherit, std_out = Inherit, std_err = Inherit}
+    let r =
+            standalone
+                True
+                (False, False, False)
+                (parentIgnoresInterrupt True . modCfg)
+                path args
+     in fmap (either id undefined) r
 
 {-# DEPRECATED interactive "Use foreground instead." #-}
 {-# INLINE interactive #-}
@@ -1099,13 +1098,11 @@ daemon ::
     -> FilePath -- ^ Executable name or path
     -> [String] -- ^ Arguments
     -> IO ProcessHandle
-daemon modCfg path args = withCreateProcess cfg (\_ _ _ p -> return p)
-
-    where
-
-    -- Detach terminal
-    modCfg1 = (setSession NewSession . modCfg)
-
-    cfg =
-        let Config c = modCfg1 $ mkConfig path args
-        in c {std_in = NoStream, std_out = NoStream, std_err = NoStream}
+daemon modCfg path args =
+    let r =
+            standalone
+                False
+                (True, True, True)
+                (setSession NewSession . modCfg)
+                path args
+     in fmap (either undefined id) r
