@@ -1,10 +1,10 @@
-resolver: lts-20.14
+resolver: lts-22.0
 packages:
 - '.'
 extra-deps:
-- streamly-core-0.1.0
-- streamly-0.9.0
-- fusion-plugin-0.2.6
+  #- streamly-core-0.1.0
+  #- streamly-0.9.0
+  #- fusion-plugin-0.2.6
 
 #- github: composewell/streamly
 #  commit: "9596aea3ab33d3c2fa513247fcfe8604bd7ff454"
