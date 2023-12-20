@@ -33,8 +33,8 @@ follows using this package:
    Command.toBytes [str|echo "hello world"|] -- Stream IO Word8
  & Command.pipeBytes [str|tr [a-z] [A-Z]|]   -- Stream IO Word8
  & Stream.fold Stdio.write                   -- IO ()
- :}
- HELLO WORLD
+:}
+HELLO WORLD
 ```
 
 ## Shell commands as streaming functions
@@ -45,8 +45,8 @@ If you want to execute the same command using the shell pipe syntax:
 >>> :{
    Command.toBytes [str|sh "-c" "echo 'hello world' | tr [a-z] [A-Z]"|] -- Stream IO Word8
  & Stream.fold Stdio.write                                              -- IO ()
- :}
- HELLO WORLD
+:}
+HELLO WORLD
 ```
 
 ## Running Commands Concurrently
@@ -61,7 +61,7 @@ grep file =
    Command.toBytes [str|grep -H "pattern" #{file}|]             -- Stream IO Word8
  & Stream.handle (\(_ :: Command.ProcessFailure) -> Stream.nil) -- Stream IO Word8
  & Stream.foldMany (Fold.takeEndBy (== 10) Array.write)         -- Stream IO (Array Word8)
- :}
+:}
 
 >>> :{
 pgrep =
