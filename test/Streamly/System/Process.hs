@@ -482,7 +482,7 @@ main = do
     -- https://github.com/haskell/cabal/issues/7577 .
     r <- doesFileExist "/usr/bin/env"
     unless r $ do
-        putStrLn $ "/usr/bin/env does not exist, skipping tests."
+        putStrLn "/usr/bin/env does not exist, skipping tests."
         exitSuccess
 
     hspec $ do
