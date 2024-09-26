@@ -38,7 +38,9 @@
 --
 -- >>> :{
 --    Process.toBytes "echo" ["hello world"]
---  & Unicode.decodeLatin1 & fmap toUpper & Unicode.encodeLatin1
+--  & Unicode.decodeLatin1
+--  & fmap toUpper
+--  & Unicode.encodeLatin1
 --  & Stream.fold Stdio.write
 --  :}
 --  HELLO WORLD
@@ -72,6 +74,15 @@
 --    Dir.readFiles "."
 --  & Stream.parConcatMap id grep
 --  & Stream.fold Stdio.writeChunks
+-- :}
+--
+-- = Running Interactive Programs (e.g. ghci)
+--
+-- >>> :{
+-- ghci =
+--  Stdio.readChunks
+--   & Process.pipeChunks "ghci" []
+--   & Stdio.putChunks
 -- :}
 --
 -- = Experimental APIs

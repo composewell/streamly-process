@@ -2,6 +2,7 @@
 
 >>> :set -XFlexibleContexts
 >>> :set -XScopedTypeVariables
+>>> :set -Wno-deprecations
 >>> import Data.Char (toUpper)
 >>> import Data.Function ((&))
 >>> import qualified Streamly.Console.Stdio as Stdio
@@ -13,7 +14,8 @@
 
 For APIs that have not been released yet.
 
->>> import qualified Streamly.Internal.Console.Stdio as Stdio (putChars, putChunks)
+>>> import Streamly.Internal.System.IO (defaultChunkSize)
+>>> import qualified Streamly.Internal.Console.Stdio as Stdio (putChars, putChunks, readChunks)
 >>> import qualified Streamly.Internal.FileSystem.Dir as Dir (readFiles)
 >>> import qualified Streamly.Internal.System.Process as Process
 >>> import qualified Streamly.Internal.Unicode.Stream as Unicode (lines)

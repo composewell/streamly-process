@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Remove buffering from the pipe chunked APIs.
+
 ## 0.3.1 (Dec 2023)
 
 * Allow streamly-0.10.0 and streamly-core-0.2.0
