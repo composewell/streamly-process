@@ -805,6 +805,8 @@ processBytes = pipeBytes
 -- For control over the input buffer use your own chunking and chunk based
 -- APIs.
 --
+-- NOTE: This API uses UTF-8 encoding.
+--
 -- >>> :{
 --    Process.toChars "echo" ["hello world"]
 --  & Process.pipeChars "tr" ["[a-z]", "[A-Z]"]
@@ -982,6 +984,8 @@ toChunks = toChunksWith id
 -- | @toChars path args@ runs the executable specified by @path@ using @args@
 -- as arguments and returns the output of the process as a stream of chars.
 --
+-- NOTE: This API uses UTF-8 encoding.
+--
 -- Raises 'ProcessFailure' exception in case of failure.
 --
 -- Definition:
@@ -999,6 +1003,8 @@ toChars path args = toBytes path args & Unicode.decodeUtf8
 -- | @toLines f path args@ runs the executable specified by @path@ using @args@
 -- as arguments and folds the output of the process at line breaks, using the
 -- fold @f@, to return a stream of folded lines.
+--
+-- NOTE: This API uses UTF-8 encoding.
 --
 -- Raises 'ProcessFailure' exception in case of failure.
 --
@@ -1021,6 +1027,8 @@ toLines f path args = toChars path args & Unicode.lines f
 
 -- | @toString path args@ runs the executable specified by @path@ using @args@
 -- as arguments and folds the entire output of the process as a single string.
+--
+-- NOTE: This API uses UTF-8 encoding.
 --
 -- Definition:
 --
