@@ -77,6 +77,8 @@ module Streamly.Internal.System.Process
     , inheritStdin
     , inheritStdout
     , pipeStdErr
+    , pipeStdin
+    , pipeStdout
 
     -- * Exceptions
     , ProcessFailure (..)
@@ -225,6 +227,12 @@ mkConfig _ _ = Config False
 
 pipeStdErr :: Config -> Config
 pipeStdErr (Config _) = Config True
+
+pipeStdin :: Config -> Config
+pipeStdin (Config _) = Config True
+
+pipeStdout :: Config -> Config
+pipeStdout (Config _) = Config True
 
 inheritStdin :: Config -> Config
 inheritStdin (Config _) = Config True
@@ -465,6 +473,12 @@ waitForChildTree = waitForDescendants
 pipeStdErr :: Config -> Config
 pipeStdErr (Config cfg) = Config $ cfg { std_err = CreatePipe }
 
+pipeStdin :: Config -> Config
+pipeStdin (Config cfg) = Config $ cfg { std_in = CreatePipe }
+
+pipeStdout :: Config -> Config
+pipeStdout (Config cfg) = Config $ cfg { std_out = CreatePipe }
+
 inheritStdin :: Config -> Config
 inheritStdin (Config cfg) = Config $ cfg { std_in = Inherit }
 
@@ -530,7 +544,7 @@ cleanupNormal (_, _, _, procHandle) = do
 -- still hanging around.
 cleanupException ::
     (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> IO ()
-cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = do
+cleanupException (stdinMaybe, stdoutMaybe, stderrMaybe, ph) = do
     -- Send a SIGTERM to the process
 #ifdef USE_NATIVE
     terminate ph
@@ -541,8 +555,8 @@ cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = do
     -- Ideally we should be closing the handle without flushing the buffers so
     -- that we cannot get a SIGPIPE. But there seems to be no way to do that as
     -- of now so we just ignore the SIGPIPE.
-    hClose stdinH `catch` eatSIGPIPE
-    hClose stdoutH
+    whenJust (\stdinH -> hClose stdinH `catch` eatSIGPIPE) stdinMaybe
+    whenJust hClose stdoutMaybe
     whenJust hClose stderrMaybe
 
     -- Non-blocking wait for the process to go away
@@ -565,7 +579,6 @@ cleanupException (Just stdinH, Just stdoutH, stderrMaybe, ph) = do
             _ -> False
 
     eatSIGPIPE e = unless (isSIGPIPE e) $ throwIO e
-cleanupException _ = error "cleanupProcess: Not reachable"
 
 -- | Creates a system process from an executable path and arguments. For the
 -- default attributes used to create the process see 'mkConfig'.
@@ -630,6 +643,11 @@ pipeChunksWithAction run modCfg path args =
 
     alloc = createProc' modCfg path args
 
+-- Note: It is allowed to inheritStdout or inheritStderr but not both as that
+-- would not generate a stream for further processing.
+-- inheritStdin has no affect, we always pipe the input stream to the process's
+-- stdin
+
 -- | Like 'pipeChunksEither' but use the specified configuration to run the
 -- process.
 {-# INLINE pipeChunksEitherWith #-}
@@ -641,10 +659,12 @@ pipeChunksEitherWith ::
     -> Stream m (Array Word8)    -- ^ Input stream
     -> Stream m (Either (Array Word8) (Array Word8))     -- ^ Output stream
 pipeChunksEitherWith modifier path args input =
-    pipeChunksWithAction run (modifier . pipeStdErr) path args
+    pipeChunksWithAction run (pipeStdin . modifier . pipeStdErr) path args
 
     where
 
+    run (_, Nothing, Nothing, _) =
+        error "pipeChunksEitherWith: only one of stdout or stderr can be inherited"
     run (Just stdinH, Just stdoutH, Just stderrH, _) =
         putChunksClose stdinH input
             `parallel` fmap Left (toChunksClose stderrH)
@@ -704,6 +724,10 @@ pipeBytesEither path args input =
         rightRdr = fmap Right Array.reader
      in UNFOLD_EACH (Unfold.either leftRdr rightRdr) output
 
+-- Note: inheritStdin, inheritStdout have no affect, we always pipe
+-- the input stream to the process's stdin and pipe the stdout to the
+-- resulting stream
+
 -- | Like 'pipeChunks' but use the specified configuration to run the process.
 {-# INLINE pipeChunksWith #-}
 pipeChunksWith ::
@@ -714,13 +738,14 @@ pipeChunksWith ::
     -> Stream m (Array Word8)    -- ^ Input stream
     -> Stream m (Array Word8)    -- ^ Output stream
 pipeChunksWith modifier path args input =
-    pipeChunksWithAction run modifier path args
+    pipeChunksWithAction run (pipeStdout . pipeStdin . modifier) path args
 
     where
 
     run (Just stdinH, Just stdoutH, _, _) =
-        putChunksClose stdinH input `parallel` toChunksClose stdoutH
-    run _ = error "pipeChunksWith: Not reachable"
+        putChunksClose stdinH input
+            `parallel` toChunksClose stdoutH
+    run _ = error "pipeChunksWith: unreachable"
 
 -- | @pipeChunks file args input@ runs the executable @file@ specified by
 -- its name or path using @args@ as arguments and @input@ stream as its
@@ -853,6 +878,10 @@ pipeChars path args input =
 -- Generation
 -------------------------------------------------------------------------------
 
+-- Note: It is allowed to inheritStdout or inheritStderr but not both as that
+-- would not generate a stream for further processing and would result in unintuitive
+-- behaviour
+
 -- | Like 'toChunksEither' but use the specified configuration to run the
 -- process.
 {-# INLINE toChunksEitherWith #-}
@@ -863,14 +892,18 @@ toChunksEitherWith ::
     -> [String]             -- ^ Arguments
     -> Stream m (Either (Array Word8) (Array Word8))     -- ^ Output stream
 toChunksEitherWith modifier path args =
-    pipeChunksWithAction run (modifier . inheritStdin . pipeStdErr) path args
+    pipeChunksWithAction run (modifier . inheritStdin . pipeStdErr . pipeStdout) path args
 
     where
 
-    run (_, Just stdoutH, Just stderrH, _) =
-        fmap Left (toChunksClose stderrH)
-            `parallel` fmap Right (toChunksClose stdoutH)
-    run _ = error "toChunksEitherWith: Not reachable"
+    run (_, Nothing, Nothing, _) =
+        error "toChunksEitherWith: only one of stdout or stderr can be inherited"
+    run (_, stdoutMaybe, stderrMaybe, _) =
+        fmap Left (whenJustS toChunksClose stderrMaybe)
+            `parallel` fmap Right (whenJustS toChunksClose stdoutMaybe)
+
+-- Note: inheritStdout has no affect, we always pipe stdout to the resulting
+-- stream
 
 -- | Like 'toChunks' but use the specified configuration to run the process.
 {-# INLINE toChunksWith #-}
@@ -881,12 +914,12 @@ toChunksWith ::
     -> [String]             -- ^ Arguments
     -> Stream m (Array Word8)    -- ^ Output stream
 toChunksWith modifier path args =
-    pipeChunksWithAction run (modifier . inheritStdin) path args
+    pipeChunksWithAction run (pipeStdout . modifier . inheritStdin) path args
 
     where
 
     run (_, Just stdoutH, _, _) = toChunksClose stdoutH
-    run _ = error "toChunksWith: Not reachable"
+    run _                       = error "toChunksWith: Not reachable"
 
 -- | @toBytesEither path args@ runs the executable at @path@ using @args@ as
 -- arguments and returns the output of the process as a stream of 'Either'
@@ -1193,3 +1226,7 @@ daemon modCfg path args =
                 (setSession NewSession . modCfg)
                 path args
      in fmap (either undefined id) r
+
+
+whenJustS :: Applicative m => (a -> Stream m b) -> Maybe a -> Stream m b
+whenJustS action mb = maybe Stream.nil action mb
