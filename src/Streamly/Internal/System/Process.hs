@@ -80,6 +80,12 @@ module Streamly.Internal.System.Process
     , pipeStdin
     , pipeStdout
 
+    -- ** CleanupConfig options
+    , setCleanupCfg
+    , setTerminateOnException
+    , setInterruptOnException
+    , setWaitOnException
+
     -- * Exceptions
     , ProcessFailure (..)
 
@@ -158,6 +164,7 @@ import System.Process
     , waitForProcess
     , CmdSpec(..)
     , terminateProcess
+    , interruptProcessGroupOf
     , withCreateProcess
     )
 #endif
@@ -242,13 +249,29 @@ inheritStdout (Config _) = Config True
 
 #else
 
-newtype Config = Config CreateProcess
+data InterruptOrTerminate =
+  Interrupt
+  -- ^Uses "interruptProcessGroupOf" in cleanup on exception
+  -- sends SIGINT to the child process
+  | Terminate
+  -- ^Uses "terminateProcess" in cleanup on exception
+  -- sends SIGTERM to the child process
+
+data CleanupConfig = CleanupConfig
+  { terminateBehaviour :: InterruptOrTerminate
+  , blockingWait :: Bool
+  }
+
+defaultCleanupConfig :: CleanupConfig
+defaultCleanupConfig = CleanupConfig Terminate False
+
+data Config = Config CleanupConfig CreateProcess
 
 -- | Create a default process configuration from an executable file path and
 -- an argument list.
 --
 mkConfig :: FilePath -> [String] -> Config
-mkConfig path args = Config $ CreateProcess
+mkConfig path args = Config defaultCleanupConfig $ CreateProcess
     { cmdspec = RawCommand path args
     , cwd = Nothing -- inherit
     , env = Nothing -- inherit
@@ -286,14 +309,14 @@ mkConfig path args = Config $ CreateProcess
 --
 -- Default is 'Nothing' - inherited from the parent process.
 setCwd :: Maybe FilePath -> Config -> Config
-setCwd path (Config cfg) = Config $ cfg { cwd = path }
+setCwd path (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { cwd = path }
 
 -- | Set the environment variables for the new process. When 'Nothing', the
 -- environment is inherited from the parent process.
 --
 -- Default is 'Nothing' - inherited from the parent process.
 setEnv :: Maybe [(String, String)] -> Config -> Config
-setEnv e (Config cfg) = Config $ cfg { env = e }
+setEnv e (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { env = e }
 
 {-
 -- XXX We should allow setting only those stdio streams which are not used for
@@ -323,15 +346,15 @@ toStdStream x =
 
 -- | What to do with the @stdin@ stream of the process.
 setStdin :: Stdio -> Config -> Config
-setStdin x (Config cfg) = Config $ cfg { std_in = toStdStream x }
+setStdin x (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { std_in = toStdStream x }
 
 -- | What to do with the @stdout@ stream of the process.
 setStdout :: Stdio -> Config -> Config
-setStdout x (Config cfg) = Config $ cfg { std_out = toStdStream x }
+setStdout x (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { std_out = toStdStream x }
 
 -- | What to do with the @stderr@ stream of the process.
 setStderr :: Stdio -> Config -> Config
-setStderr x (Config cfg) = Config $ cfg { std_err = toStdStream x }
+setStderr x (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { std_err = toStdStream x }
 -}
 
 -- | Close all open file descriptors inherited from the parent process. Note,
@@ -343,7 +366,7 @@ setStderr x (Config cfg) = Config $ cfg { std_err = toStdStream x }
 -- Note: if the number of open descriptors is large, it may take a while
 -- closing them.
 closeFiles :: Bool -> Config -> Config
-closeFiles x (Config cfg) = Config $ cfg { close_fds = x }
+closeFiles x (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { close_fds = x }
 
 -- XXX Do these details apply to Windows as well?
 
@@ -356,7 +379,7 @@ closeFiles x (Config cfg) = Config $ cfg { close_fds = x }
 --
 -- Default is 'False', the new process belongs to the parent's process group.
 newProcessGroup :: Bool -> Config -> Config
-newProcessGroup x (Config cfg) = Config $ cfg { create_group = x }
+newProcessGroup x (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { create_group = x }
 
 -- | 'InheritSession' makes the new process inherit the terminal session from the
 -- parent process. This is the default.
@@ -389,8 +412,8 @@ data Session =
 --
 -- Default is 'InheritSession'.
 setSession :: Session -> Config -> Config
-setSession x (Config cfg) =
-    Config $
+setSession x (Config cleanupCfg cfg) =
+    Config cleanupCfg $
         case x of
             InheritSession -> cfg
             NewSession -> cfg { new_session = True}
@@ -409,11 +432,11 @@ setSession x (Config cfg) =
 -- Default is 'Nothing' - inherit from the parent.
 setUserId :: Maybe Word32 -> Config -> Config
 #if defined(mingw32_HOST_OS)
-setUserId _ (Config cfg) =
-    Config cfg
+setUserId _ (Config cleanupCfg cfg) =
+    Config cleanupCfg cfg
 #else
-setUserId x (Config cfg) =
-    Config $ cfg { child_user = CUid <$> x }
+setUserId x (Config cleanupCfg cfg) =
+    Config cleanupCfg $ cfg { child_user = CUid <$> x }
 #endif
 
 -- | Use the POSIX
@@ -429,12 +452,24 @@ setUserId x (Config cfg) =
 -- Default is 'Nothing' - inherit from the parent.
 setGroupId :: Maybe Word32 -> Config -> Config
 #if defined(mingw32_HOST_OS)
-setGroupId _ (Config cfg) =
-    Config cfg
+setGroupId _ (Config cleanupCfg cfg) =
+    Config cleanupCfg cfg
 #else
-setGroupId x (Config cfg) =
-    Config $ cfg { child_group = CGid <$> x }
+setGroupId x (Config cleanupCfg cfg) =
+    Config cleanupCfg $ cfg { child_group = CGid <$> x }
 #endif
+
+setCleanupCfg :: (CleanupConfig -> CleanupConfig) -> Config -> Config
+setCleanupCfg modCleanupCfg (Config cleanupCfg cfg) = Config (modCleanupCfg cleanupCfg) cfg
+
+setTerminateOnException :: CleanupConfig -> CleanupConfig
+setTerminateOnException cleanupCfg = cleanupCfg { terminateBehaviour = Terminate }
+
+setInterruptOnException :: CleanupConfig -> CleanupConfig
+setInterruptOnException cleanupCfg = cleanupCfg { terminateBehaviour = Interrupt }
+
+setWaitOnException :: Bool -> CleanupConfig -> CleanupConfig
+setWaitOnException b cleanupCfg = cleanupCfg { blockingWait = b }
 
 -- See https://www.cons.org/cracauer/sigint.html for more details on signal
 -- handling by interactive processes.
@@ -453,7 +488,7 @@ setGroupId x (Config cfg) =
 --
 -- POSIX only. Default is 'False'.
 interruptChildOnly :: Bool -> Config -> Config
-interruptChildOnly x (Config cfg) = Config $ cfg { delegate_ctlc = x }
+interruptChildOnly x (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { delegate_ctlc = x }
 
 {-# DEPRECATED parentIgnoresInterrupt "Use interruptChildOnly instead." #-}
 parentIgnoresInterrupt :: Bool -> Config -> Config
@@ -464,26 +499,26 @@ parentIgnoresInterrupt = interruptChildOnly
 --
 -- Default is 'True'.
 waitForDescendants :: Bool -> Config -> Config
-waitForDescendants x (Config cfg) = Config $ cfg { use_process_jobs = x }
+waitForDescendants x (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { use_process_jobs = x }
 
 {-# DEPRECATED waitForChildTree "Use waitForDescendants instead." #-}
 waitForChildTree :: Bool -> Config -> Config
 waitForChildTree = waitForDescendants
 
 pipeStdErr :: Config -> Config
-pipeStdErr (Config cfg) = Config $ cfg { std_err = CreatePipe }
+pipeStdErr (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { std_err = CreatePipe }
 
 pipeStdin :: Config -> Config
-pipeStdin (Config cfg) = Config $ cfg { std_in = CreatePipe }
+pipeStdin (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { std_in = CreatePipe }
 
 pipeStdout :: Config -> Config
-pipeStdout (Config cfg) = Config $ cfg { std_out = CreatePipe }
+pipeStdout (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { std_out = CreatePipe }
 
 inheritStdin :: Config -> Config
-inheritStdin (Config cfg) = Config $ cfg { std_in = Inherit }
+inheritStdin (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { std_in = Inherit }
 
 inheritStdout :: Config -> Config
-inheritStdout (Config cfg) = Config $ cfg { std_out = Inherit }
+inheritStdout (Config cleanupCfg cfg) = Config cleanupCfg $ cfg { std_out = Inherit }
 #endif
 
 -------------------------------------------------------------------------------
@@ -543,13 +578,18 @@ cleanupNormal (_, _, _, procHandle) = do
 -- possibly use a timer and send a SIGKILL after the timeout if the process is
 -- still hanging around.
 cleanupException ::
-    (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> IO ()
-cleanupException (stdinMaybe, stdoutMaybe, stderrMaybe, ph) = do
+    CleanupConfig
+    -> (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> IO ()
+cleanupException cleanupCfg (stdinMaybe, stdoutMaybe, stderrMaybe, ph) = do
     -- Send a SIGTERM to the process
 #ifdef USE_NATIVE
-    terminate ph
+    case terminateBehaviour cleanupCfg of
+      Interrupt -> _
+      Terminate -> terminate ph
 #else
-    terminateProcess ph
+    case terminateBehaviour cleanupCfg of
+      Interrupt -> interruptProcessGroupOf ph
+      Terminate -> terminateProcess ph
 #endif
 
     -- Ideally we should be closing the handle without flushing the buffers so
@@ -561,9 +601,13 @@ cleanupException (stdinMaybe, stdoutMaybe, stderrMaybe, ph) = do
 
     -- Non-blocking wait for the process to go away
 #ifdef USE_NATIVE
-    void $ forkIO (void $ wait ph)
+    if blockingWait cleanupCfg
+      then void $ wait ph
+      else void $ forkIO (void $ wait ph)
 #else
-    void $ forkIO (void $ waitForProcess ph)
+    if blockingWait cleanupCfg
+      then void $ waitForProcess ph
+      else void $ forkIO (void $ waitForProcess ph)
 #endif
 
     where
@@ -587,7 +631,7 @@ createProc' ::
        (Config -> Config) -- ^ Process attribute modifier
     -> FilePath                         -- ^ Executable path
     -> [String]                         -- ^ Arguments
-    -> IO (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
+    -> IO (CleanupConfig, (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle))
     -- ^ (Input Handle, Output Handle, Error Handle, Process Handle)
 createProc' modCfg path args = do
 #ifdef USE_NATIVE
@@ -602,18 +646,18 @@ createProc' modCfg path args = do
     hSetBuffering inp NoBuffering
     hSetBuffering out NoBuffering
     hSetBuffering err NoBuffering
-    return (Just inp, Just out, err, proc)
+    return (cleanupCfg, (Just inp, Just out, err, proc))
 #else
     r@(inp, out, err, _) <- createProcess cfg
     mapM_ (`hSetBuffering` NoBuffering) inp
     mapM_ (`hSetBuffering` NoBuffering) out
     mapM_ (`hSetBuffering` NoBuffering) err
-    return r
+    return (cleanupCfg, r)
 #endif
 
     where
 
-    Config cfg = modCfg $ mkConfig path args
+    Config cleanupCfg cfg = modCfg $ mkConfig path args
 
 {-# INLINE putChunksClose #-}
 putChunksClose :: MonadIO m =>
@@ -637,7 +681,7 @@ pipeChunksWithAction ::
     -> Stream m a     -- ^ Output stream
 pipeChunksWithAction run modCfg path args =
     Stream.bracketIO3
-          alloc cleanupNormal cleanupException cleanupException run
+          alloc (cleanupNormal . snd) (uncurry cleanupException) (uncurry cleanupException) (run . snd)
 
     where
 
@@ -1161,7 +1205,7 @@ standalone wait (close_stdin, close_stdout, close_stderr) modCfg path args =
         else return $ Right procHandle
 
     cfg =
-        let Config c = modCfg $ mkConfig path args
+        let Config _ c = modCfg $ mkConfig path args
             s_in = if close_stdin then NoStream else Inherit
             s_out = if close_stdout then NoStream else Inherit
             s_err = if close_stderr then NoStream else Inherit
