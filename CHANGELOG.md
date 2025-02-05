@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Remove buffering from the pipe chunked APIs.
+* Add a `toBytesWith` function to modify process configuration
 
 ## 0.3.1 (Dec 2023)
 
