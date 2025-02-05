@@ -84,6 +84,7 @@ module Streamly.Internal.System.Process
     -- * Generation
     -- | stdout of the process is redirected to output stream.
     , toBytes
+    , toBytesWith
     , toChunks
     , toChunksWith
     , toChars
@@ -942,6 +943,20 @@ toBytes ::
     -> Stream m Word8    -- ^ Output Stream
 toBytes path args =
     let output = toChunks path args
+     in UNFOLD_EACH Array.reader output
+
+-- | Like 'toBytes' but use the specified configuration to run the process.
+--
+-- @since 0.3.2
+{-# INLINE toBytesWith #-}
+toBytesWith ::
+    (MonadAsync m, MonadCatch m)
+    => (Config -> Config)
+    -> FilePath     -- ^ Executable name or path
+    -> [String]     -- ^ Arguments
+    -> Stream m Word8    -- ^ Output Stream
+toBytesWith modCfg path args =
+    let output = toChunksWith modCfg path args
      in UNFOLD_EACH Array.reader output
 
 -- | Like 'toBytesEither' but generates a stream of @Array Word8@ instead of a stream

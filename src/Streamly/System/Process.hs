@@ -132,6 +132,7 @@ module Streamly.System.Process
     , toChunks
     , toChunksWith
     , toBytes
+    , toBytesWith
     , toChars
     , toLines
 
