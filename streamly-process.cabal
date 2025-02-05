@@ -100,11 +100,11 @@ library
     , streamly          >= 0.9 && < 0.12
     , streamly-core     >= 0.1 && < 0.4
   if !flag(use-native)
-    build-depends: process >= 1.0 && < 1.7
-  else
-     if !os(windows)
-       build-depends:
-         unix >= 2.5 && < 2.8
+    build-depends:
+        process >= 1.0 && < 1.7
+  if !os(windows)
+    build-depends:
+      unix >= 2.5 && < 2.8
 
 -------------------------------------------------------------------------------
 -- Benchmarks
