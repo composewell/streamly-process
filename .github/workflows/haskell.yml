@@ -48,7 +48,7 @@ jobs:
       #RESOLVER: ${{ matrix.resolver }}
       CABAL_BUILD_OPTIONS: ${{ matrix.cabal_build_options }}
       CABAL_PROJECT: ${{ matrix.cabal_project }}
-      #DISABLE_DOCS: ${{ matrix.disable_docs }}
+      DISABLE_DOCS: ${{ matrix.disable_docs }}
       #DISABLE_SDIST_BUILD: ${{ matrix.disable_sdist_build }}
       #DISABLE_SDIST_BUILD: "y"
       HLINT_VERSION: 3.6.1
@@ -117,12 +117,13 @@ jobs:
             cabal_project: cabal.project.d/master
             cabal-build-options: --flag fusion-plugin
 
-          - name: 8.10.7+macOS
-            runner: macos-latest
+          - name: 8.10.7
+            runner: ubuntu-latest
             ghc_version: 8.10.7
             build: cabal
             cabal-version: 3.2
             cabal_project: cabal.project.d/master
+            disable_docs: y
 
           - name: 8.8.4
             runner: ubuntu-latest
@@ -130,6 +131,7 @@ jobs:
             build: cabal
             cabal-version: 3.2
             cabal_project: cabal.project.d/master
+            disable_docs: y
 
           - name: 8.6.5
             runner: ubuntu-latest
@@ -137,6 +139,7 @@ jobs:
             build: cabal
             cabal-version: 3.2
             cabal_project: cabal.project.d/master
+            disable_docs: y
 
     steps:
     - uses: actions/checkout@v2
