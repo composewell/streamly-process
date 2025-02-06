@@ -64,18 +64,19 @@ module Streamly.Internal.System.Process
     , setSession
 
     -- * Posix Only Options
-    -- | These options have no effect on Windows.
+    -- | Posix options have no effect on Windows.
     , interruptChildOnly
     , setUserId
     , setGroupId
 
     -- * Windows Only Options
-    -- | These options have no effect on Posix.
+    -- | Windows options have no effect on Posix.
     , waitForDescendants
 
     -- * Internal
     , inheritStdin
     , inheritStdout
+    , inheritStderr
     , pipeStdErr
     , pipeStdin
     , pipeStdout
@@ -445,7 +446,7 @@ setGroupId x (Config cfg) =
 -- multiple child processes are started then the default handling in the parent
 -- is restored only after the last one exits.
 --
--- When a user presses CTRL-C or CTRL-\ on the terminal, a SIGINT or SIGQUIT is
+-- When a user presses CTRL-C or CTRL-\\ on the terminal, a SIGINT or SIGQUIT is
 -- sent to all the foreground processes in the terminal session, this includes
 -- both the child and the parent. By default, on receiving these signals, the
 -- parent process would cleanup and exit, to avoid that and let the child
@@ -480,11 +481,57 @@ pipeStdin (Config cfg) = Config $ cfg { std_in = CreatePipe }
 pipeStdout :: Config -> Config
 pipeStdout (Config cfg) = Config $ cfg { std_out = CreatePipe }
 
+-- XXX useParentStdin
+
+-- | Use the input from the parent's stdin instead of using an input stream.
+--
+-- Note, this option does not have any effect in pipe APIs. This is effective
+-- only in the APIs which take no input stream. In those cases enabling this
+-- allows the executable to take input from the stdin of the parent.
+--
 inheritStdin :: Config -> Config
 inheritStdin (Config cfg) = Config $ cfg { std_in = Inherit }
 
+-- XXX useParentStdout
+
+-- | Redirect the output to the parent's stdout instead of generating an output
+-- stream.
+--
+-- This option does not have any effect in APIs that provide only output in
+-- the output stream. For \"either\" type APIs this redirects the stdout of the
+-- child process to the parent stdout.
+--
+-- NOTE: Signal handling behavior with InheritStdout:
+--
+-- When you specify InheritStdout in toChunksWith, the child process fully
+-- controls the terminal as it has inherited both stdin (default) and stdout.
+-- In this case I think the process package delegates SIGINT solely to the
+-- child process - which means the parent ignores SIGINT. We did not ask it to
+-- delegate, but my guess is that it still does it anyway in this case. Also
+-- notice that if you send SIGINT again to the parent, it exits. Because I
+-- guess the parent's signal handler got reset to SIG_DFL action on the first
+-- SIGINT - thus the second SIGINT has the effect of aborting the process,
+-- however the child process will remain because the parent got aborted, it did
+-- not handle the signal.
+--
+-- When you do not specify InheritStdout,  the SIGINT is not delegated solely
+-- to the child, the parent and child both can handle SIGINT. In this case when
+-- you send a SIGINT to the parent it will properly handle it and cleanup would
+-- happen.
+
 inheritStdout :: Config -> Config
 inheritStdout (Config cfg) = Config $ cfg { std_out = Inherit }
+
+-- XXX useParentStderr
+
+-- | Redirect the stderr output to the parent's stderr instead of emitting it
+-- in the output stream.
+--
+-- Note, in either type APIs this option will result in no output for error
+-- stream. Instead errors will come on the stderr of the parent process.
+--
+inheritStderr :: Config -> Config
+inheritStderr (Config cfg) = Config $ cfg { std_err = Inherit }
 #endif
 
 -------------------------------------------------------------------------------
@@ -910,6 +957,15 @@ toChunksEitherWith modifier path args =
 -- stream
 
 -- | Like 'toChunks' but use the specified configuration to run the process.
+--
+-- In this API 'inheritStdin' is enabled by default, therefore, the child
+-- process can read from the stdin of the parent:
+--
+-- <<img/System.Process.toChunksWith.svg>>
+--
+-- 'inheritStdin' can be disabled by using a config modifier. In that case if
+-- the child process tries to read from stdin then an exception is generated.
+--
 {-# INLINE toChunksWith #-}
 toChunksWith ::
     (MonadCatch m, MonadAsync m)

@@ -41,6 +41,7 @@ extra-source-files:
   test/data/passExec.sh
   test/data/writeTrToError.bat
   test/data/writeTrToError.sh
+  diagrams/img/*.svg
 
 source-repository head
   type: git
@@ -53,6 +54,11 @@ flag fusion-plugin
 
 flag use-native
   description: Do not depend on the process package
+  manual: True
+  default: False
+
+flag use-diagrams
+  description: Use the diagrams package for diagrams in docs
   manual: True
   default: False
 
@@ -153,3 +159,20 @@ test-suite Test.System.Process
     , QuickCheck        >= 2.10  && < 2.16
     -- Uses internal APIs
     , streamly-core
+
+-------------------------------------------------------------------------------
+-- Doc diagrams
+-------------------------------------------------------------------------------
+
+executable Diagram.System.Process
+    main-is: Streamly/Diagram/System/Process.hs
+    ghc-options: -Wall -main-is Streamly.Diagram.System.Process.main
+    build-depends:
+          base
+        , diagrams-lib
+        , diagrams-svg
+
+    hs-source-dirs: diagrams
+    default-language: Haskell2010
+    if !flag(use-diagrams)
+      buildable: False

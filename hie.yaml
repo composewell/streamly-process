@@ -20,6 +20,13 @@ cradle:
           cabal:
             - path: "./test/Streamly/System/Process.hs"
               component: "test:Test.System.Process"
+
+    - path: "./diagrams"
+      config:
+        cradle:
+          cabal:
+            - path: "./diagrams/Streamly/Diagram/System/Process.hs"
+              component: "Diagram.System.Process"
 dependencies:
   - streamly-process.cabal
   - hie.yaml
