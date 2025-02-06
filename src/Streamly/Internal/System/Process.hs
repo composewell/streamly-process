@@ -177,6 +177,18 @@ import qualified Streamly.Internal.Unicode.Stream as Unicode (lines)
 #include "DocTestProcess.hs"
 
 -------------------------------------------------------------------------------
+-- Compatibility
+-------------------------------------------------------------------------------
+
+#if MIN_VERSION_streamly_core(0,3,0)
+#define UNFOLD_EACH Stream.unfoldEach
+#define CHUNKS_OF Array.chunksOf
+#else
+#define UNFOLD_EACH Stream.unfoldMany
+#define CHUNKS_OF Stream.chunksOf
+#endif
+
+-------------------------------------------------------------------------------
 -- Config
 -------------------------------------------------------------------------------
 
@@ -686,11 +698,11 @@ pipeBytesEither ::
     -> Stream m Word8        -- ^ Input Stream
     -> Stream m (Either Word8 Word8) -- ^ Output Stream
 pipeBytesEither path args input =
-    let input1 = Stream.chunksOf defaultChunkSize input
+    let input1 = CHUNKS_OF defaultChunkSize input
         output = pipeChunksEither path args input1
         leftRdr = fmap Left Array.reader
         rightRdr = fmap Right Array.reader
-     in Stream.unfoldMany (Unfold.either leftRdr rightRdr) output
+     in UNFOLD_EACH (Unfold.either leftRdr rightRdr) output
 
 -- | Like 'pipeChunks' but use the specified configuration to run the process.
 {-# INLINE pipeChunksWith #-}
@@ -784,9 +796,9 @@ pipeBytes ::
     -> Stream m Word8    -- ^ Input Stream
     -> Stream m Word8    -- ^ Output Stream
 pipeBytes path args input = -- rights . pipeBytesEither path args
-    let input1 = Stream.chunksOf defaultChunkSize input
+    let input1 = CHUNKS_OF defaultChunkSize input
         output = pipeChunks path args input1
-     in Stream.unfoldMany Array.reader output
+     in UNFOLD_EACH Array.reader output
 
 {-# DEPRECATED processBytes "Please use pipeBytes instead." #-}
 {-# INLINE processBytes #-}
@@ -906,7 +918,7 @@ toBytesEither path args =
     let output = toChunksEither path args
         leftRdr = fmap Left Array.reader
         rightRdr = fmap Right Array.reader
-     in Stream.unfoldMany (Unfold.either leftRdr rightRdr) output
+     in UNFOLD_EACH (Unfold.either leftRdr rightRdr) output
 
 -- | @toBytes path args@ runs the executable specified by @path@ using @args@
 -- as arguments and returns the output of the process as a stream of bytes.
@@ -930,7 +942,7 @@ toBytes ::
     -> Stream m Word8    -- ^ Output Stream
 toBytes path args =
     let output = toChunks path args
-     in Stream.unfoldMany Array.reader output
+     in UNFOLD_EACH Array.reader output
 
 -- | Like 'toBytesEither' but generates a stream of @Array Word8@ instead of a stream
 -- of @Word8@.

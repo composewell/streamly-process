@@ -2,6 +2,10 @@
 
 module Main (main) where
 
+-------------------------------------------------------------------------------
+-- Imports
+-------------------------------------------------------------------------------
+
 import Data.Function ((&))
 import Data.List ((\\))
 import Data.Maybe (fromMaybe)
@@ -35,6 +39,22 @@ import qualified Streamly.Data.Stream as Stream
 
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
 import qualified Streamly.Internal.System.Command as Cmd (quotedWord)
+
+-------------------------------------------------------------------------------
+-- Compatibility
+-------------------------------------------------------------------------------
+
+#if MIN_VERSION_streamly_core(0,3,0)
+#define UNFOLD_EACH Stream.unfoldEach
+#define CHUNKS_OF Array.chunksOf
+#else
+#define UNFOLD_EACH Stream.unfoldMany
+#define CHUNKS_OF Stream.chunksOf
+#endif
+
+-------------------------------------------------------------------------------
+-- Tests
+-------------------------------------------------------------------------------
 
 newtype SimpleError = SimpleError String
     deriving Show
@@ -172,7 +192,7 @@ toBytes2 = monadicIO $ run checkFailAction
 
 {-# INLINE concatArr #-}
 concatArr :: (Monad m, Unbox a) => Stream m (Array a) -> Stream m a
-concatArr = S.unfoldMany Array.reader
+concatArr = UNFOLD_EACH Array.reader
 
 toChunks1 :: Property
 toChunks1 =
@@ -270,7 +290,7 @@ processChunksConsumeAllInput =
                     Proc.pipeChunks
                     trBinary
                     ["[a-z]", "[A-Z]"]
-                    (S.chunksOf arrayChunkSize inputStream)
+                    (CHUNKS_OF arrayChunkSize inputStream)
 
                 charUpperStrm = fmap toUpper inputStream
 
@@ -290,7 +310,7 @@ processChunksConsumePartialInput =
                     Proc.pipeChunks
                     path
                     ["-n", "1"]
-                    (S.chunksOf arrayChunkSize inputStream)
+                    (CHUNKS_OF arrayChunkSize inputStream)
 
                 headLine =
                       S.foldMany
@@ -409,7 +429,7 @@ pipeChunksEither1 =
                     Proc.pipeChunksEither
                     trBinary
                     ["[a-z]", "[A-Z]"]
-                    (S.chunksOf arrayChunkSize inputStream)
+                    (CHUNKS_OF arrayChunkSize inputStream)
 
                 charUpperStrm = fmap toUpper inputStream
 
@@ -427,7 +447,7 @@ pipeChunksEither2 =
                     Proc.pipeChunksEither
                     interpreterFile
                     [interpreterArg, executableFile, "[a-z]", "[A-Z]"]
-                    (S.chunksOf arrayChunkSize inputStream)
+                    (CHUNKS_OF arrayChunkSize inputStream)
 
                 charUpperStrm = fmap toUpper inputStream
 
