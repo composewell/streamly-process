@@ -128,6 +128,12 @@ module Streamly.System.Process
     -- | These options have no effect on Posix.
     , waitForDescendants
 
+    -- ** CleanupConfig options
+    , setCleanupCfg
+    , setTerminateOnException
+    , setInterruptOnException
+    , setWaitOnException
+
     -- * Generation
     , toChunks
     , toChunksWith
