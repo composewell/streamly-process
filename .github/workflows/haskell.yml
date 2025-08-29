@@ -60,6 +60,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: 9.10.1-Werror
+            ghc_version: 9.10.1
+            build: cabal
+            runner: ubuntu-latest
+            cabal-version: 3.10.2.0
+            cabal_project: cabal.project.d/master-Werror
 
           - name: 9.8.1-Werror
             ghc_version: 9.8.1
