@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (Sep 2025)
 
 * Remove buffering from the pipe chunked APIs.
 * Add a `toBytesWith` function to modify process configuration
