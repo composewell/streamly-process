@@ -5,6 +5,7 @@
 >>> import Data.Char (toUpper)
 >>> import Data.Function ((&))
 >>> import Streamly.Unicode.String (str)
+>>> import System.FilePath (FilePath)
 >>> import qualified Streamly.Console.Stdio as Stdio
 >>> import qualified Streamly.Data.Array as Array
 >>> import qualified Streamly.Data.Fold as Fold
