@@ -178,6 +178,18 @@ import qualified Streamly.Internal.System.Process as Process -- (ProcessFailure 
 -- better efficiency and type safety.
 --
 -- Normally, you should not need the system shell but if you want to use shell
--- scripts in your program then you can take a look at the @streamly-shell@
--- package which provides convenient wrapper over "Streamly.System.Process" to
--- execute shell scripts, commands.
+-- scripts in your program then you can use the following interpreter as a
+-- helper for convenient wrappers.
+--
+-- >>> :{
+-- interpreter :: (FilePath -> [String] -> a) -> String -> a
+-- interpreter f cmd = f "/bin/sh" ["-c", cmd]
+-- :}
+--
+-- >>> toBytes = interpreter Process.toBytes
+-- >>> toChunks = interpreter Process.toChunks
+-- >>> toChars = interpreter Process.toChars
+-- >>> toLines f = interpreter (Process.toLines f)
+-- >>> toString = interpreter Process.toString
+-- >>> toStdout = interpreter Process.toStdout
+-- >>> toNull = interpreter Process.toNull
