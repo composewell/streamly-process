@@ -38,10 +38,9 @@
 -- With the "Streamly.System.Command" module you can write the examples in the
 -- "Streamly.System.Process" module more conveniently.
 --
--- = Executables as functions
+-- = Executables as Functions
 --
--- The shell command @echo "hello world" | tr [a-z] [A-Z]@ can be written as
--- follows using this module:
+-- The shell command @echo "hello world" | tr [a-z] [A-Z]@ can be expressed as:
 --
 -- >>> :{
 --    Command.toBytes [str|echo "hello world"|]
@@ -50,11 +49,16 @@
 --  :}
 --  HELLO WORLD
 --
--- = Shell commands as functions
+-- Here, system commands are run as independent processes and composed
+-- directly in Haskell — without invoking a shell. This offers a powerful,
+-- type-safe, and efficient alternative to shell scripting, using Streamly’s
+-- streaming APIs for composition.
 --
--- We recommend using streamly to compose commands natively in Haskell rather
--- than using the shell as shown in the previous example. However, if for some
--- reason you want to execute commands using the shell:
+-- = Shell Commands as Functions
+--
+-- Prefer running commands directly and composing their output in Haskell (see
+-- previous example) instead of relying on a shell interpreter. If you want to
+-- run a command using shell as interpreter, you can invoke it like this:
 --
 -- >>> :{
 --    Command.toBytes [str|sh "-c" "echo 'hello world' | tr [a-z] [A-Z]"|]
@@ -168,16 +172,3 @@ import qualified Streamly.Internal.System.Process as Process -- (ProcessFailure 
 -- Keep it synced with the Internal module
 
 #include "DocTestCommand.hs"
--- Note: Commands are not executed using shell
---
--- You can use this module to execute system commands and compose them with
--- Haskell.  It does not use the system shell to execute commands, they are
--- executed as independent processes. This provides a convenient and powerful
--- way to replace shell scripting with Haskell. Instead of composing commands
--- using shell you can use Haskell Streamly streaming APIs to compose them with
--- better efficiency and type safety.
---
--- Normally, you should not need the system shell but if you want to use shell
--- scripts in your program then you can take a look at the @streamly-shell@
--- package which provides convenient wrapper over "Streamly.System.Process" to
--- execute shell scripts, commands.
