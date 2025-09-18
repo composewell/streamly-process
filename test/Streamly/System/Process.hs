@@ -558,7 +558,7 @@ main = do
                    shellWordTest
                        "\"hello\\\"\\\\w\\'orld\""
                        ["hello\"\\w\\'orld"]
-                -- TODO: We need to let the escape character be at the end
-                -- "wordWithQuotes" needs to be fixed!
-                -- it "Double quote test" $
-                --    shellWordTest "'hello\'" ["hello\\"]
+#if MIN_VERSION_streamly_core(0,3,0)
+                it "Double quote test, escape at end" $
+                    shellWordTest "'hello\\'" ["hello\\"]
+#endif
