@@ -35,11 +35,14 @@ module Streamly.Internal.System.Command
     , foreground
     , daemon
 
-    -- * Helpers
-    , quotedWord
+    -- * Low-level Functions
+    , shellWord
     , runWith
     , streamWith
     , pipeWith
+
+    -- * Deprecated
+    , quotedWord
     )
 where
 
@@ -63,7 +66,10 @@ import qualified Streamly.Internal.System.Process as Process
 
 #include "DocTestCommand.hs"
 
--- | Posix compliant quote escaping:
+-- | Posix compliant quoted shell command string parsing with escaping:
+--
+-- Quotes and escapes are parsed as in a standard POSIX shell.
+-- Examples (using shell @echo@ command):
 --
 -- $ echo 'hello\\"world'
 -- hello\\"world
@@ -73,9 +79,9 @@ import qualified Streamly.Internal.System.Process as Process
 --
 -- $ echo 'hello\'
 -- hello\
-{-# INLINE quotedWord #-}
-quotedWord :: MonadCatch m => Parser Char m String
-quotedWord =
+{-# INLINE shellWord #-}
+shellWord :: MonadCatch m => Parser Char m String
+shellWord =
     let toRQuote x =
             case x of
                 '"' -> Just x
@@ -91,6 +97,11 @@ quotedWord =
                 _ -> Nothing
         trEsc _ _ = Nothing
      in Parser.wordWithQuotes False trEsc '\\' toRQuote isSpace Fold.toList
+
+{-# DEPRECATED quotedWord "Use shellWord instead." #-}
+{-# INLINE quotedWord #-}
+quotedWord :: MonadCatch m => Parser Char m String
+quotedWord = shellWord
 
 -- | A modifier for stream generation APIs in "Streamly.System.Process" to
 -- generate streams from command strings.
@@ -110,7 +121,7 @@ streamWith f cmd =
     Stream.concatEffect $ do
         xs <- Stream.fold Fold.toList
                 $ Stream.catRights
-                $ Stream.parseMany quotedWord
+                $ Stream.parseMany shellWord
                 $ Stream.fromList cmd
         case xs of
             y:ys -> return $ f y ys
@@ -133,7 +144,7 @@ runWith :: MonadCatch m =>
 runWith f cmd = do
     xs <- Stream.fold Fold.toList
             $ Stream.catRights
-            $ Stream.parseMany quotedWord
+            $ Stream.parseMany shellWord
             $ Stream.fromList cmd
     case xs of
         y:ys -> f y ys
@@ -161,7 +172,7 @@ pipeWith f cmd input =
     Stream.concatEffect $ do
         xs <- Stream.fold Fold.toList
                 $ Stream.catRights
-                $ Stream.parseMany quotedWord
+                $ Stream.parseMany shellWord
                 $ Stream.fromList cmd
         case xs of
             y:ys -> return $ f y ys input

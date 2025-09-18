@@ -38,7 +38,7 @@ import qualified Streamly.System.Process as Proc
 import qualified Streamly.Data.Stream as Stream
 
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
-import qualified Streamly.Internal.System.Command as Cmd (quotedWord)
+import qualified Streamly.Internal.System.Command as Cmd (shellWord)
 
 -------------------------------------------------------------------------------
 -- Compatibility
@@ -486,12 +486,12 @@ pipeChunksEither4 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
-quotedWordTest :: String -> [String] -> IO ()
-quotedWordTest inp expected = do
+shellWordTest :: String -> [String] -> IO ()
+shellWordTest inp expected = do
     res <-
         Stream.fold Fold.toList
             $ Stream.catRights
-            $ Stream.parseMany Cmd.quotedWord $ Stream.fromList inp
+            $ Stream.parseMany Cmd.shellWord $ Stream.fromList inp
     res `shouldBe` expected
 
 main :: IO ()
@@ -551,14 +551,14 @@ main = do
                 prop "toBytesEither cat = FH.toBytes" toBytes1
                 prop "toBytesEither on failing executable" toBytes2
 
-            describe "quotedWord" $ do
+            describe "shellWord" $ do
                 it "Single quote test" $
-                   quotedWordTest "'hello\\\\\"world'" ["hello\\\\\"world"]
+                   shellWordTest "'hello\\\\\"world'" ["hello\\\\\"world"]
                 it "Double quote test" $
-                   quotedWordTest
+                   shellWordTest
                        "\"hello\\\"\\\\w\\'orld\""
                        ["hello\"\\w\\'orld"]
                 -- TODO: We need to let the escape character be at the end
                 -- "wordWithQuotes" needs to be fixed!
                 -- it "Double quote test" $
-                --    quotedWordTest "'hello\'" ["hello\\"]
+                --    shellWordTest "'hello\'" ["hello\\"]
