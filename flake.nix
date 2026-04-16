@@ -2,7 +2,7 @@
   description = "streamly-process";
 
   inputs = {
-    basepkgs.url = "git+ssh://git@github.com/composewell/streamly-packages?rev=71f2b6792a9f64be2c4bca5050cb1e08edd625b2";
+    basepkgs.url = "git+ssh://git@github.com/composewell/streamly-packages?rev=187bde6bd362eced707ed96198ddc193af66ff42";
     nixpkgs.follows = "basepkgs/nixpkgs";
     nixpkgs-darwin.follows = "basepkgs/nixpkgs-darwin";
   };
