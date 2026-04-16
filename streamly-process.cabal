@@ -107,7 +107,7 @@ library
   else
      if !os(windows)
        build-depends:
-         unix >= 2.5 && < 2.8
+         unix >= 2.5 && < 2.9
 
 -------------------------------------------------------------------------------
 -- Benchmarks
@@ -130,7 +130,7 @@ benchmark Benchmark.System.Process
     , directory         >= 1.2.2 && < 1.4
     -- Uses internal APIs
     , streamly-core
-    , tasty-bench >= 0.2.5 && < 0.5
+    , tasty-bench >= 0.2.5 && < 0.6
 
   if flag(fusion-plugin) && !impl(ghc < 8.6)
     build-depends:
@@ -150,6 +150,6 @@ test-suite Test.System.Process
     , directory         >= 1.2.2 && < 1.4
     , exceptions        >= 0.8   && < 0.11
     , hspec             >= 2.0   && < 3
-    , QuickCheck        >= 2.10  && < 2.16
+    , QuickCheck        >= 2.10  && < 2.19
     -- Uses internal APIs
     , streamly-core
