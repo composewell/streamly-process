@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 (Apr 2026)
+
+* Rename quotedWord to shellWord
+
 ## 0.4.0 (Sep 2025)
 
 * Remove buffering from the pipe chunked APIs.

@@ -1,6 +1,6 @@
 cabal-version:       2.2
 name:                streamly-process
-version:             0.4.0
+version:             0.4.1
 synopsis:            Write shell-like command pipelines in Haskell
 description:
   Treat operating system (OS) processes as first-class stream
