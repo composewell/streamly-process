@@ -1,14 +1,21 @@
 cabal-version:       2.2
 name:                streamly-process
 version:             0.4.0
-synopsis:            Use OS processes as stream transformation functions
+synopsis:            Write shell-like command pipelines in Haskell
 description:
-  Use operating system (OS) commands in Haskell programs as if they were
-  native Haskell functions, by treating their inputs and outputs as
-  Haskell streams. This allows you to write high-level Haskell scripts
-  that can perform tasks similar to shell scripts, but with C-like
-  performance, and with strong safety guarantees, refactorability, and
-  modularity.
+  Treat operating system (OS) processes as first-class stream
+  transformations in Haskell. This package lets you compose external
+  commands as if they were native Haskell functions, connecting
+  their inputs and outputs through typed streams and perform tasks
+  concurrently. It let's you do your scripting tasks in Haskell with
+  near-native performance.
+  .
+  The API is designed to be concise and ergonomic, making it easy
+  to express complex pipelines with minimal boilerplate. You can
+  build high-level, declarative workflows similar to shell scripts
+  while retaining Haskell’s strengths: type safety, composability,
+  refactorability, and modular design. Moreover, you get the concurrent
+  compositions and C-like performance of streamly.
 homepage:            https://streamly.composewell.com
 bug-reports:         https://github.com/composewell/streamly-process/issues
 license:             Apache-2.0

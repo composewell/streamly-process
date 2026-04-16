@@ -49,16 +49,16 @@
 --  :}
 --  HELLO WORLD
 --
--- Here, system commands are run as independent processes and composed
--- directly in Haskell — without invoking a shell. This offers a powerful,
--- type-safe, and efficient alternative to shell scripting, using Streamly’s
--- streaming APIs for composition.
+-- In the example above, system commands are run as independent processes and
+-- composed directly in Haskell, without invoking a shell. This offers a
+-- powerful, type-safe, and efficient alternative to shell scripting, using
+-- Streamly’s streaming APIs for composition.
 --
 -- = Shell Commands as Functions
 --
 -- Prefer running commands directly and composing their output in Haskell (see
--- previous example) instead of relying on a shell interpreter. If you want to
--- run a command using shell as interpreter, you can invoke it like this:
+-- previous example) instead of using shell pipes. But if you really want to
+-- run a command using shell as interpreter, you can do that too like this:
 --
 -- >>> :{
 --    Command.toBytes [str|sh "-c" "echo 'hello world' | tr [a-z] [A-Z]"|]
