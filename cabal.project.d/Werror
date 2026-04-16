@@ -1,0 +1,4 @@
+packages: streamly-process.cabal
+
+package streamly-process
+  ghc-options: -Werror

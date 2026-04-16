@@ -6,8 +6,8 @@ hie.yaml
 appveyor.yml
 default.nix
 stack.yaml
-cabal.project.d/master
-cabal.project.d/master-Werror
+cabal.project.d/streamly-master
+cabal.project.d/Werror
 cabal.project.d/streamly-0.9.0
 cabal.project.d/streamly-0.10.0
 flake.lock

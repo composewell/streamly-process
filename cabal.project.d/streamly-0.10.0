@@ -1,5 +1,5 @@
 packages: streamly-process.cabal
 
 constraints:
-    streamly == 0.10.0.*
-  , streamly-core == 0.2.0.*
+    streamly == 0.10.*
+  , streamly-core == 0.2.*
