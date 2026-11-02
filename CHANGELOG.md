@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bug fixes
+
+* `daemon` and `standalone False` no longer terminate the process with
+  SIGTERM as soon as it is launched.
 ## 0.4.1 (Apr 2026)
 
 * Rename quotedWord to shellWord

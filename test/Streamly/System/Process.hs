@@ -10,6 +10,7 @@ import Data.Function ((&))
 import Data.List ((\\))
 import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
+import Control.Concurrent (threadDelay)
 import Control.Exception (Exception)
 import Control.Monad (unless)
 import Control.Monad.Catch (throwM, catch)
@@ -18,8 +19,9 @@ import Streamly.Data.Array (Array, Unbox)
 import Streamly.Data.Stream (Stream)
 import Streamly.System.Process (ProcessFailure (..))
 import System.Directory (removeFile, findExecutable, doesFileExist)
-import System.Exit (exitSuccess)
+import System.Exit (ExitCode(..), exitSuccess)
 import System.IO (IOMode(..), openFile, hClose)
+import System.Process (getProcessExitCode, terminateProcess, waitForProcess)
 import Test.Hspec (describe, hspec, it, shouldBe)
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
@@ -486,6 +488,42 @@ pipeChunksEither4 = monadicIO $ run checkFailAction
 
     checkFailAction = catch action failAction
 
+-------------------------------------------------------------------------------
+-- Standalone processes
+-------------------------------------------------------------------------------
+
+-- | Time given to a process to die if it was wrongly terminated.
+settleTime :: Int
+settleTime = 300000
+
+-- | @daemon@ and @standalone False@ must return without terminating the
+-- process.
+daemonKeepsRunning :: IO ()
+daemonKeepsRunning = do
+    ph <- Proc.daemon id "sleep" ["10"]
+    threadDelay settleTime
+    st <- getProcessExitCode ph
+    terminateProcess ph
+    _ <- waitForProcess ph
+    st `shouldBe` Nothing
+
+standaloneNoWaitKeepsRunning :: IO ()
+standaloneNoWaitKeepsRunning = do
+    r <- Proc.standalone False (True, True, True) id "sleep" ["10"]
+    case r of
+        Left code -> error $ "standalone returned exit code " ++ show code
+        Right ph -> do
+            threadDelay settleTime
+            st <- getProcessExitCode ph
+            terminateProcess ph
+            _ <- waitForProcess ph
+            st `shouldBe` Nothing
+
+standaloneWaitExitCode :: IO ()
+standaloneWaitExitCode = do
+    r <- Proc.standalone True (True, True, True) id "sh" ["-c", "exit 3"]
+    either Just (const Nothing) r `shouldBe` Just (ExitFailure 3)
+
 shellWordTest :: String -> [String] -> IO ()
 shellWordTest inp expected = do
     res <-
@@ -550,6 +588,13 @@ main = do
             describe "toBytesEither" $ do
                 prop "toBytesEither cat = FH.toBytes" toBytes1
                 prop "toBytesEither on failing executable" toBytes2
+
+            describe "standalone processes" $ do
+                it "daemon keeps the process running" daemonKeepsRunning
+                it "standalone False keeps the process running"
+                    standaloneNoWaitKeepsRunning
+                it "standalone True returns the exit code"
+                    standaloneWaitExitCode
 
             describe "shellWord" $ do
                 it "Single quote test" $

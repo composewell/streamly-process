@@ -1159,7 +1159,13 @@ toNull path args = toChunks path args & Stream.fold Fold.drain
 --
 -- If the parent chooses to wait for the process an 'ExitCode' is returned
 -- otherwise a 'ProcessHandle' is returned which can be used to terminate the
--- process, send signals to it or wait for it to finish.
+-- process, send signals to it or wait for it to finish. If the parent does
+-- not wait, it must call @waitForProcess@ on the 'ProcessHandle' to reap the
+-- process after it exits, otherwise the process remains a zombie until the
+-- parent exits.
+--
+-- If the parent waits and an exception interrupts the wait, the process is
+-- terminated with SIGTERM.
 {-# INLINE standalone #-}
 standalone ::
        Bool -- ^ Wait for process to finish?
@@ -1169,14 +1175,13 @@ standalone ::
     -> [String] -- ^ Arguments
     -> IO (Either ExitCode ProcessHandle)
 standalone wait (close_stdin, close_stdout, close_stderr) modCfg path args =
-    withCreateProcess cfg postCreate
+    -- withCreateProcess terminates the process when it returns, therefore,
+    -- use it only when we wait for the process.
+    if wait
+    then Left <$> withCreateProcess cfg (\_ _ _ ph -> waitForProcess ph)
+    else (\(_, _, _, ph) -> Right ph) <$> createProcess cfg
 
     where
-
-    postCreate _ _ _ procHandle =
-        if wait
-        then Left <$> waitForProcess procHandle
-        else return $ Right procHandle
 
     cfg =
         let Config c = modCfg $ mkConfig path args
@@ -1228,7 +1233,8 @@ interactive = foreground
 -- process to finish.
 --
 -- The 'ProcessHandle' returned can be used to terminate the daemon or send
--- signals to it.
+-- signals to it. Call @waitForProcess@ on it to reap the process after it
+-- exits, otherwise the process remains a zombie until the parent exits.
 --
 {-# INLINE daemon #-}
 daemon ::
