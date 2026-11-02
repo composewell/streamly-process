@@ -173,7 +173,7 @@ import qualified Streamly.Internal.Console.Stdio as Stdio (putChunks)
 import qualified Streamly.Data.Stream.Prelude as Stream
 import qualified Streamly.Internal.Data.Unfold as Unfold (either)
 import qualified Streamly.Internal.FileSystem.Handle
-    as Handle (readChunks, putChunks)
+    as Handle (readChunks, putChunk)
 import qualified Streamly.Unicode.Stream as Unicode
 import qualified Streamly.Internal.Unicode.Stream as Unicode (lines)
 
@@ -538,6 +538,21 @@ cleanupNormal (_, _, _, procHandle) = do
         ExitFailure code -> throwM $ ProcessFailure code
 #endif
 
+-- | 'True' if the exception is a write to a pipe whose read end is closed
+-- (EPIPE).
+isEPIPE :: IOException -> Bool
+isEPIPE e =
+    case e of
+        IOError
+            { ioe_type = ResourceVanished
+            , ioe_errno = Just ioe
+            } -> Errno ioe == ePIPE
+        _ -> False
+
+-- | Ignore an EPIPE exception, rethrow any other exception.
+ignoreEPIPE :: IOException -> IO ()
+ignoreEPIPE e = unless (isEPIPE e) $ throwIO e
+
 -- | On an exception or if the process is getting garbage collected we need to
 -- close the pipe handles, and send a SIGTERM to the process to clean it up.
 -- Since we are using SIGTERM to kill the process, it may block forever. We can
@@ -556,7 +571,7 @@ cleanupException (stdinMaybe, stdoutMaybe, stderrMaybe, ph) = do
     -- Ideally we should be closing the handle without flushing the buffers so
     -- that we cannot get a SIGPIPE. But there seems to be no way to do that as
     -- of now so we just ignore the SIGPIPE.
-    whenJust (\stdinH -> hClose stdinH `catch` eatSIGPIPE) stdinMaybe
+    whenJust (\stdinH -> hClose stdinH `catch` ignoreEPIPE) stdinMaybe
     whenJust hClose stdoutMaybe
     whenJust hClose stderrMaybe
 
@@ -570,16 +585,6 @@ cleanupException (stdinMaybe, stdoutMaybe, stderrMaybe, ph) = do
     where
 
     whenJust action mb = maybe (pure ()) action mb
-
-    isSIGPIPE e =
-        case e of
-            IOError
-                { ioe_type = ResourceVanished
-                , ioe_errno = Just ioe
-                } -> Errno ioe == ePIPE
-            _ -> False
-
-    eatSIGPIPE e = unless (isSIGPIPE e) $ throwIO e
 
 -- | Creates a system process from an executable path and arguments. For the
 -- default attributes used to create the process see 'mkConfig'.
@@ -616,13 +621,29 @@ createProc' modCfg path args = do
 
     Config cfg = modCfg $ mkConfig path args
 
+-- | Write the input stream to the handle and close the handle.
+--
+-- If the process closes the read end of the pipe (e.g. it exits) before
+-- reading all of the input, the write fails with EPIPE. Then we stop writing
+-- and do not consume the rest of the input, like a shell pipeline in which
+-- SIGPIPE terminates the writer. The result is determined by the exit code of
+-- the process.
 {-# INLINE putChunksClose #-}
 putChunksClose :: MonadIO m =>
     Handle -> Stream m (Array Word8) -> Stream m a
 putChunksClose h input =
     Stream.before
-        (Handle.putChunks h input >> liftIO (hClose h))
+        (Stream.fold Fold.drain (Stream.takeWhile id (Stream.mapM put input))
+            >> liftIO (hClose h `catch` ignoreEPIPE))
         Stream.nil
+
+    where
+
+    -- Returns False if the reader has closed the pipe.
+    put arr =
+        liftIO
+            $ (Handle.putChunk h arr >> return True)
+                `catch` \e -> ignoreEPIPE e >> return False
 
 {-# INLINE toChunksClose #-}
 toChunksClose :: MonadAsync m => Handle -> Stream m (Array Word8)
@@ -762,6 +783,11 @@ pipeChunksWith modifier path args input =
 --
 -- If the process terminates with a non-zero exit code then a 'ProcessFailure'
 -- exception is raised.
+--
+-- If the process exits or closes its stdin before reading all of the input,
+-- the rest of the input stream is not consumed and no exception is raised for
+-- the failed write. Like in a shell pipeline, the result is determined by the
+-- exit code of the process.
 --
 -- The following code is equivalent to the shell command @echo "hello world" |
 -- tr [a-z] [A-Z]@:

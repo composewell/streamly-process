@@ -6,6 +6,10 @@
 
 * `daemon` and `standalone False` no longer terminate the process with
   SIGTERM as soon as it is launched.
+* The pipe APIs no longer raise a "Broken pipe" `IOException` when the
+  process exits or closes its stdin before reading all of the input. The
+  rest of the input is not consumed and the exit code of the process
+  determines the result, like in a shell pipeline.
 ## 0.4.1 (Apr 2026)
 
 * Rename quotedWord to shellWord

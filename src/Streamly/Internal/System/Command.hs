@@ -202,6 +202,11 @@ pipeChunksWith modifier = pipeWith (Process.pipeChunksWith modifier)
 -- If the process terminates with a non-zero exit code then a 'Process.ProcessFailure'
 -- exception is raised.
 --
+-- If the process exits or closes its stdin before reading all of the input,
+-- the rest of the input stream is not consumed and no exception is raised for
+-- the failed write. Like in a shell pipeline, the result is determined by the
+-- exit code of the process.
+--
 -- The following code is equivalent to the shell command @echo "hello world" |
 -- tr [a-z] [A-Z]@:
 --

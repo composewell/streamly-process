@@ -489,6 +489,64 @@ pipeChunksEither4 = monadicIO $ run checkFailAction
     checkFailAction = catch action failAction
 
 -------------------------------------------------------------------------------
+-- Processes that do not read all of the input
+-------------------------------------------------------------------------------
+
+-- | More bytes than a pipe buffer holds, so that a writer blocks unless the
+-- process reads it.
+largeInputSize :: Int
+largeInputSize = 1024 * 1024
+
+largeInput :: Stream IO Word8
+largeInput = S.replicate largeInputSize _a
+
+largeInputChunks :: Stream IO (Array Word8)
+largeInputChunks = CHUNKS_OF arrayChunkSize largeInput
+
+-- | @head -c 1@ exits after reading one byte; the rest of the input must be
+-- discarded without an exception, like in a shell pipeline.
+pipeBytesPartialInput :: IO ()
+pipeBytesPartialInput = do
+    r <- S.fold Fold.toList $ Proc.pipeBytes "head" ["-c", "1"] largeInput
+    r `shouldBe` [_a]
+
+pipeBytesInfiniteInput :: IO ()
+pipeBytesInfiniteInput = do
+    r <- S.fold Fold.toList $ Proc.pipeBytes "head" ["-c", "1"] (S.repeat _a)
+    r `shouldBe` [_a]
+
+pipeChunksNoInputRead :: IO ()
+pipeChunksNoInputRead = do
+    r <- S.fold Fold.toList $ concatArr $ Proc.pipeChunks "true" [] largeInputChunks
+    r `shouldBe` []
+
+pipeChunksEitherStdinClosed :: IO ()
+pipeChunksEitherStdinClosed = do
+    r <- S.fold Fold.toList
+        $ concatArr
+        $ S.catRights
+        $ Proc.pipeChunksEither
+            "sh" ["-c", "exec 0<&-; echo hi"] largeInputChunks
+    r `shouldBe` [104, 105, 10]
+
+pipeBytesEitherPartialInput :: IO ()
+pipeBytesEitherPartialInput = do
+    r <- S.fold Fold.toList
+        $ S.catRights
+        $ Proc.pipeBytesEither "head" ["-c", "1"] largeInput
+    r `shouldBe` [_a]
+
+-- | When the process fails without reading the input, the failure must be
+-- reported as 'ProcessFailure', not as a write error on the pipe.
+pipeChunksNoInputReadFailure :: IO ()
+pipeChunksNoInputReadFailure = do
+    r <- (S.fold Fold.drain
+            (Proc.pipeChunks "sh" ["-c", "exit 2"] largeInputChunks)
+            >> return Nothing)
+        `catch` (\(ProcessFailure code) -> return (Just code))
+    r `shouldBe` Just 2
+
+-------------------------------------------------------------------------------
 -- Standalone processes
 -------------------------------------------------------------------------------
 
@@ -588,6 +646,15 @@ main = do
             describe "toBytesEither" $ do
                 prop "toBytesEither cat = FH.toBytes" toBytes1
                 prop "toBytesEither on failing executable" toBytes2
+
+            describe "process does not read all input" $ do
+                it "pipeBytes head -c 1" pipeBytesPartialInput
+                it "pipeBytes head -c 1, infinite input" pipeBytesInfiniteInput
+                it "pipeChunks true" pipeChunksNoInputRead
+                it "pipeChunksEither closing stdin" pipeChunksEitherStdinClosed
+                it "pipeBytesEither head -c 1" pipeBytesEitherPartialInput
+                it "pipeChunks failing without reading"
+                    pipeChunksNoInputReadFailure
 
             describe "standalone processes" $ do
                 it "daemon keeps the process running" daemonKeepsRunning
