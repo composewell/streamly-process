@@ -7,16 +7,16 @@
         "nixpkgs-darwin": "nixpkgs-darwin"
       },
       "locked": {
-        "lastModified": 1776376313,
-        "narHash": "sha256-lfL+xfAZVM4nYLEggaRo3nBNxTHKgjdxJTcEHkM8P7Q=",
+        "lastModified": 1776414440,
+        "narHash": "sha256-Be67u+Qea2sEuI+3BVjkc+o4fYgRT/fOANGNAp2OuFk=",
         "ref": "refs/heads/master",
-        "rev": "187bde6bd362eced707ed96198ddc193af66ff42",
-        "revCount": 123,
+        "rev": "69728978adc44f53b3dd907acb2eb5bd2415fd60",
+        "revCount": 125,
         "type": "git",
         "url": "ssh://git@github.com/composewell/streamly-packages"
       },
       "original": {
-        "rev": "187bde6bd362eced707ed96198ddc193af66ff42",
+        "rev": "69728978adc44f53b3dd907acb2eb5bd2415fd60",
         "type": "git",
         "url": "ssh://git@github.com/composewell/streamly-packages"
       }
