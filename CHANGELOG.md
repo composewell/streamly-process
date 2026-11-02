@@ -12,6 +12,9 @@
   determines the result, like in a shell pipeline.
 * `pipeChunksEitherWith` in the internal module no longer fails with
   "Not reachable" when stdout is inherited using `inheritStdout`.
+* `setSession` now replaces the session behavior set by an earlier
+  `setSession`, e.g. `setSession InheritSession . setSession NewSession`
+  inherits the session instead of creating a new one.
 ## 0.4.1 (Apr 2026)
 
 * Rename quotedWord to shellWord

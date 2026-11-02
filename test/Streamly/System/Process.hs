@@ -37,6 +37,7 @@ import qualified Streamly.Data.Array as Array
 import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Stream as S
 import qualified Streamly.System.Process as Proc
+import qualified Streamly.Unicode.Stream as Unicode
 import qualified Streamly.Data.Stream as Stream
 
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
@@ -571,6 +572,38 @@ toChunksEitherInheritStdout = do
     r `shouldBe` [Left [104, 105]]
 
 -------------------------------------------------------------------------------
+-- Config modifiers
+-------------------------------------------------------------------------------
+
+-- | Run a command with a config modifier and return its stdout as a string.
+toStringWith :: (Proc.Config -> Proc.Config) -> FilePath -> [String] -> IO String
+toStringWith modCfg path args =
+    S.fold Fold.toList
+        $ Unicode.decodeUtf8
+        $ concatArr
+        $ Proc.toChunksWith modCfg path args
+
+-- | The pid and the process group id of a process run with the modifier.
+pidAndPgid :: (Proc.Config -> Proc.Config) -> IO (Int, Int)
+pidAndPgid modCfg = do
+    out <- toStringWith modCfg "sh" ["-c", "echo $$; ps -o pgid= -p $$"]
+    case map read (words out) of
+        [pid, pgid] -> return (pid, pgid)
+        _ -> error $ "pidAndPgid: unexpected output: " ++ show out
+
+-- | A process is a group leader if its pgid is its pid. A new session makes
+-- the process a group leader, an inherited session does not.
+isGroupLeader :: (Proc.Config -> Proc.Config) -> IO Bool
+isGroupLeader modCfg = uncurry (==) <$> pidAndPgid modCfg
+
+setSessionLastWins :: IO ()
+setSessionLastWins = do
+    r <- isGroupLeader
+            (Proc.setSession Proc.InheritSession
+                . Proc.setSession Proc.NewSession)
+    r `shouldBe` False
+
+-------------------------------------------------------------------------------
 -- Standalone processes
 -------------------------------------------------------------------------------
 
@@ -685,6 +718,10 @@ main = do
                     pipeChunksEitherInheritStdout
                 it "toChunksEitherWith inheritStdout"
                     toChunksEitherInheritStdout
+
+            describe "config modifiers" $ do
+                it "setSession InheritSession after NewSession"
+                    setSessionLastWins
 
             describe "standalone processes" $ do
                 it "daemon keeps the process running" daemonKeepsRunning

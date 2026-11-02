@@ -386,16 +386,20 @@ data Session =
     | NewSession -- ^ Detach process from the current session
     | NewConsole -- ^ Windows only, CREATE_NEW_CONSOLE flag
 
--- | Define the terminal session behavior for the new process.
+-- | Define the terminal session behavior for the new process. If it is
+-- applied more than once, the last application determines the behavior.
 --
 -- Default is 'InheritSession'.
 setSession :: Session -> Config -> Config
 setSession x (Config cfg) =
     Config $
         case x of
-            InheritSession -> cfg
-            NewSession -> cfg { new_session = True}
-            NewConsole -> cfg {create_new_console = True}
+            InheritSession ->
+                cfg {new_session = False, create_new_console = False}
+            NewSession ->
+                cfg {new_session = True, create_new_console = False}
+            NewConsole ->
+                cfg {new_session = False, create_new_console = True}
 
 -- | Use the POSIX
 -- <https://man7.org/linux/man-pages/man2/setuid.2.html setuid>
