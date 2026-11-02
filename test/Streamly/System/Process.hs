@@ -7,23 +7,37 @@ module Main (main) where
 -- Imports
 -------------------------------------------------------------------------------
 
+import Data.Bits ((.&.))
 import Data.Function ((&))
-import Data.List ((\\))
+import Data.List ((\\), isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
 import Control.Concurrent (threadDelay)
-import Control.Exception (Exception, IOException, try)
+import Control.Exception
+    (Exception, IOException, displayException, finally, try)
+import Numeric (readHex)
 import GHC.IO.Exception (IOErrorType(..))
-import System.IO.Error (ioeGetErrorType)
+import System.Environment (setEnv)
+import System.IO.Error (ioeGetErrorType, isDoesNotExistError)
 import Control.Monad (unless)
 import Control.Monad.Catch (throwM, catch)
 import Control.Monad.IO.Class (MonadIO(..))
 import Streamly.Data.Array (Array, Unbox)
 import Streamly.Data.Stream (Stream)
 import Streamly.System.Process (ProcessFailure (..))
-import System.Directory (removeFile, findExecutable, doesFileExist)
+import System.Directory
+    ( canonicalizePath
+    , doesFileExist
+    , findExecutable
+    , getCurrentDirectory
+    , removeFile
+    )
 import System.Exit (ExitCode(..), exitSuccess)
-import System.IO (IOMode(..), openFile, hClose)
+import GHC.IO.Handle (hDuplicate, hDuplicateTo)
+import System.IO (IOMode(..), hClose, hFlush, openFile, stdout)
+#if !defined(mingw32_HOST_OS)
+import System.Posix.IO (closeFd, createPipe)
+#endif
 import System.Process (getProcessExitCode, terminateProcess, waitForProcess)
 import Test.Hspec
     (describe, expectationFailure, hspec, it, shouldBe, shouldSatisfy)
@@ -40,6 +54,7 @@ import Test.QuickCheck.Monadic (monadicIO, PropertyM, assert, monitor, run)
 import qualified Streamly.Data.Array as Array
 import qualified Streamly.Data.Fold as Fold
 import qualified Streamly.Data.Stream as S
+import qualified Streamly.System.Command as Command
 import qualified Streamly.System.Process as Proc
 import qualified Streamly.Unicode.Stream as Unicode
 import qualified Streamly.Data.Stream as Stream
@@ -687,6 +702,363 @@ shellWordTest inp expected = do
             $ Stream.parseMany Cmd.shellWord $ Stream.fromList inp
     res `shouldBe` expected
 
+-------------------------------------------------------------------------------
+-- Helpers for the API coverage tests
+-------------------------------------------------------------------------------
+
+ascii :: String -> [Word8]
+ascii = map (fromIntegral . fromEnum)
+
+-- | Arguments of @printf@ to print "hé" and a newline, é is two bytes in
+-- UTF-8.
+printfUtf8 :: [String]
+printfUtf8 = ["h\\303\\251\\n"]
+
+utf8Text :: String
+utf8Text = "h\233\n"
+
+-- | 'True' if the action raises 'ProcessFailure' with the given exit code.
+failsWith :: Int -> IO a -> IO Bool
+failsWith code action =
+    (action >> return False)
+        `catch` \(ProcessFailure c) -> return (c == code)
+
+-- | Run an action with stdout redirected to a file, return the output.
+captureStdout :: IO () -> IO String
+captureStdout action = do
+    let file = "./stdoutCapture"
+    hFlush stdout
+    saved <- hDuplicate stdout
+    h <- openFile file WriteMode
+    hDuplicateTo h stdout
+    hClose h
+    action `finally` (hFlush stdout >> hDuplicateTo saved stdout)
+    hClose saved
+    out <- readFile file
+    length out `seq` removeFile file
+    return out
+
+eitherToLists ::
+    Stream IO (Either (Array Word8) (Array Word8)) -> IO ([Word8], [Word8])
+eitherToLists =
+    S.fold (Fold.partition (Fold.lmap Array.toList Fold.mconcat)
+                           (Fold.lmap Array.toList Fold.mconcat))
+
+-------------------------------------------------------------------------------
+-- Streamly.System.Process API coverage
+-------------------------------------------------------------------------------
+
+processFailureDisplay :: IO ()
+processFailureDisplay =
+    displayException (ProcessFailure 3)
+        `shouldBe` "Process failed with exit code: 3"
+
+-- | A process terminated by a signal fails with the negated signal number.
+processFailureSignal :: IO ()
+processFailureSignal =
+    failsWith (-15) (Proc.toString "sh" ["-c", "kill -TERM $$"])
+        >>= (`shouldBe` True)
+
+execFailure :: IO ()
+execFailure = do
+    r <- try (Proc.toString "/nonexistent/executable" [])
+    case r of
+        Left (e :: IOException) -> e `shouldSatisfy` isDoesNotExistError
+        Right v -> expectationFailure $ "expected an exception, got " ++ v
+
+toChunksEcho :: IO ()
+toChunksEcho =
+    S.fold Fold.toList (concatArr (Proc.toChunks "echo" ["hello"]))
+        >>= (`shouldBe` ascii "hello\n")
+
+toBytesEcho :: IO ()
+toBytesEcho =
+    S.fold Fold.toList (Proc.toBytes "echo" ["hello"])
+        >>= (`shouldBe` ascii "hello\n")
+
+toBytesWithCwd :: IO ()
+toBytesWithCwd =
+    S.fold Fold.toList (Proc.toBytesWith (Proc.setCwd (Just "/")) "pwd" [])
+        >>= (`shouldBe` ascii "/\n")
+
+toCharsUtf8 :: IO ()
+toCharsUtf8 =
+    S.fold Fold.toList (Proc.toChars "printf" printfUtf8)
+        >>= (`shouldBe` utf8Text)
+
+-- | Invalid UTF-8 is decoded as the replacement character U+FFFD.
+toCharsInvalidUtf8 :: IO ()
+toCharsInvalidUtf8 =
+    S.fold Fold.toList (Proc.toChars "printf" ["a\\377b"])
+        >>= (`shouldBe` "a\65533b")
+
+-- | The last line is emitted even without a trailing newline.
+toLinesSplit :: IO ()
+toLinesSplit =
+    S.fold Fold.toList (Proc.toLines Fold.toList "printf" ["a\\nb\\n\\nc"])
+        >>= (`shouldBe` ["a", "b", "", "c"])
+
+toStringEcho :: IO ()
+toStringEcho = Proc.toString "echo" ["hello"] >>= (`shouldBe` "hello\n")
+
+toStringFailure :: IO ()
+toStringFailure =
+    failsWith 1 (Proc.toString "false" []) >>= (`shouldBe` True)
+
+toStdoutEcho :: IO ()
+toStdoutEcho =
+    captureStdout (Proc.toStdout "echo" ["hello"]) >>= (`shouldBe` "hello\n")
+
+toNullEcho :: IO ()
+toNullEcho = Proc.toNull "echo" ["hello"] >>= (`shouldBe` ())
+
+toNullFailure :: IO ()
+toNullFailure = failsWith 1 (Proc.toNull "false" []) >>= (`shouldBe` True)
+
+pipeChunksWithEnv :: IO ()
+pipeChunksWithEnv = do
+    r <- S.fold Fold.toList
+        $ concatArr
+        $ Proc.pipeChunksWith
+            (Proc.setEnv (Just [("STREAMLY_PROCESS_TEST", "1")]))
+            "/bin/sh" ["-c", "cat; echo $STREAMLY_PROCESS_TEST"]
+            (S.fromPure (Array.fromList (ascii "a")))
+    r `shouldBe` ascii "a1\n"
+
+toChunksEitherWithCwd :: IO ()
+toChunksEitherWithCwd = do
+    r <- eitherToLists
+        $ Proc.toChunksEitherWith (Proc.setCwd (Just "/"))
+            "sh" ["-c", "pwd; printf x >&2"]
+    r `shouldBe` (ascii "x", ascii "/\n")
+
+pipeChunksEitherWithCwd :: IO ()
+pipeChunksEitherWithCwd = do
+    r <- eitherToLists
+        $ Proc.pipeChunksEitherWith (Proc.setCwd (Just "/"))
+            "sh" ["-c", "cat; pwd >&2"]
+            (S.fromPure (Array.fromList (ascii "a")))
+    r `shouldBe` (ascii "/\n", ascii "a")
+
+foregroundExitCode :: IO ()
+foregroundExitCode = do
+    Proc.foreground id "sh" ["-c", "exit 3"] >>= (`shouldBe` ExitFailure 3)
+    Proc.foreground id "true" [] >>= (`shouldBe` ExitSuccess)
+
+-- | Whether the descriptor is open in a process run by @standalone True@.
+-- @test -e@ is a shell builtin, the shell does not open any file before it.
+standaloneFdOpen :: (Bool, Bool, Bool) -> Int -> IO Bool
+standaloneFdOpen closeStreams fd = do
+    r <- Proc.standalone True closeStreams id
+            "sh" ["-c", "test -e /dev/fd/" ++ show fd]
+    case r of
+        Left code -> return (code == ExitSuccess)
+        Right _ -> error "standalone returned a handle"
+
+standaloneCloseStreams :: IO ()
+standaloneCloseStreams = do
+    closed <- mapM (uncurry standaloneFdOpen)
+        [ ((True, False, False), 0)
+        , ((False, True, False), 1)
+        , ((False, False, True), 2)
+        ]
+    closed `shouldBe` [False, False, False]
+    inherited <- mapM (standaloneFdOpen (False, False, False)) [0, 1, 2]
+    inherited `shouldBe` [True, True, True]
+
+-------------------------------------------------------------------------------
+-- Config modifier coverage
+-------------------------------------------------------------------------------
+
+setCwdTest :: IO ()
+setCwdTest = do
+    toStringWith (Proc.setCwd (Just "/")) "pwd" [] >>= (`shouldBe` "/\n")
+    cwd <- getCurrentDirectory >>= canonicalizePath
+    toStringWith (Proc.setCwd Nothing) "pwd" ["-P"]
+        >>= (`shouldBe` cwd ++ "\n")
+
+setEnvTest :: IO ()
+setEnvTest = do
+    envPath <- which "env"
+    toStringWith
+        (Proc.setEnv (Just [("STREAMLY_PROCESS_TEST", "1")])) envPath []
+        >>= (`shouldBe` "STREAMLY_PROCESS_TEST=1\n")
+    setEnv "STREAMLY_PROCESS_TEST" "2"
+    toStringWith (Proc.setEnv Nothing)
+        "sh" ["-c", "echo $STREAMLY_PROCESS_TEST"]
+        >>= (`shouldBe` "2\n")
+
+closeFilesTest :: IO ()
+#if defined(mingw32_HOST_OS)
+closeFilesTest = return ()
+#else
+closeFilesTest = do
+    (r, w) <- createPipe
+    let isOpenInChild cl =
+            not <$> failsWith 1
+                (toStringWith (Proc.closeFiles cl)
+                    "sh" ["-c", "test -e /dev/fd/" ++ show (fromEnum r)])
+    open1 <- isOpenInChild False
+    open2 <- isOpenInChild True
+    closeFd r
+    closeFd w
+    (open1, open2) `shouldBe` (True, False)
+#endif
+
+newProcessGroupTest :: IO ()
+newProcessGroupTest = do
+    isGroupLeader (Proc.newProcessGroup True) >>= (`shouldBe` True)
+    isGroupLeader (Proc.newProcessGroup False) >>= (`shouldBe` False)
+
+setSessionTest :: IO ()
+setSessionTest = do
+    isGroupLeader id >>= (`shouldBe` False)
+    isGroupLeader (Proc.setSession Proc.NewSession) >>= (`shouldBe` True)
+    isGroupLeader (Proc.setSession Proc.InheritSession) >>= (`shouldBe` False)
+    -- NewConsole has no effect on POSIX
+    isGroupLeader (Proc.setSession Proc.NewConsole) >>= (`shouldBe` False)
+
+-- | The signals ignored by the parent, as seen by the child process. Linux
+-- only, returns Nothing if /proc is not available.
+parentIgnoredSignals :: (Proc.Config -> Proc.Config) -> IO (Maybe Integer)
+parentIgnoredSignals modCfg = do
+    hasProc <- doesFileExist "/proc/self/status"
+    if not hasProc
+    then return Nothing
+    else do
+        out <- toStringWith modCfg
+                "sh" ["-c", "grep SigIgn /proc/$PPID/status"]
+        case readHex (dropWhile (`elem` " \t") (drop 7 out)) of
+            [(mask, _)] | "SigIgn:" `isPrefixOf` out -> return (Just mask)
+            _ -> error $ "parentIgnoredSignals: bad output " ++ show out
+
+-- | SIGINT is 2 and SIGQUIT is 3, their bits in the mask are 0x2 and 0x4.
+interruptChildOnlyTest :: IO ()
+interruptChildOnlyTest = do
+    m1 <- parentIgnoredSignals (Proc.interruptChildOnly True)
+    m2 <- parentIgnoredSignals (Proc.interruptChildOnly False)
+    fmap (.&. 6) m1 `shouldSatisfy` maybe True (== 6)
+    fmap (.&. 6) m2 `shouldSatisfy` maybe True (== 0)
+
+-- | The process package calls initgroups when the user id is set, which
+-- needs root privileges even if the user id does not change.
+setUserIdTest :: IO ()
+setUserIdTest = do
+    uid <- read <$> Proc.toString "id" ["-u"]
+    toStringWith (Proc.setUserId Nothing) "id" ["-u"]
+        >>= (`shouldBe` show uid ++ "\n")
+    r <- try (toStringWith (Proc.setUserId (Just uid)) "id" ["-u"])
+    if uid == 0
+    then r `shouldBe` Right "0\n"
+    else case r of
+        Left (_ :: IOException) -> return ()
+        Right v -> expectationFailure $ "expected an exception, got " ++ v
+
+setGroupIdTest :: IO ()
+setGroupIdTest = do
+    gid <- read <$> Proc.toString "id" ["-g"]
+    toStringWith (Proc.setGroupId (Just gid)) "id" ["-g"]
+        >>= (`shouldBe` show gid ++ "\n")
+    toStringWith (Proc.setGroupId Nothing) "id" ["-g"]
+        >>= (`shouldBe` show gid ++ "\n")
+
+-- | No effect on POSIX.
+waitForDescendantsTest :: IO ()
+waitForDescendantsTest = do
+    toStringWith (Proc.waitForDescendants True) "echo" ["x"]
+        >>= (`shouldBe` "x\n")
+    toStringWith (Proc.waitForDescendants False) "echo" ["x"]
+        >>= (`shouldBe` "x\n")
+
+-------------------------------------------------------------------------------
+-- Streamly.Internal.System.Process API coverage
+-------------------------------------------------------------------------------
+
+pipeCharsCat :: IO ()
+pipeCharsCat =
+    S.fold Fold.toList (IProc.pipeChars "cat" [] (S.fromList utf8Text))
+        >>= (`shouldBe` utf8Text)
+
+-- | The internal modifiers already applied by an API leave it unchanged.
+internalModifiers :: IO ()
+internalModifiers = do
+    toStringWith IProc.inheritStdin "echo" ["x"] >>= (`shouldBe` "x\n")
+    toStringWith IProc.pipeStdout "echo" ["x"] >>= (`shouldBe` "x\n")
+    eitherToLists
+        (IProc.toChunksEitherWith (IProc.pipeStdErr . IProc.pipeStdout)
+            "sh" ["-c", "printf o; printf e >&2"])
+        >>= (`shouldBe` (ascii "e", ascii "o"))
+    S.fold Fold.toList
+        (concatArr
+            (IProc.pipeChunksWith IProc.pipeStdin "cat" []
+                (S.fromPure (Array.fromList (ascii "a")))))
+        >>= (`shouldBe` ascii "a")
+
+-------------------------------------------------------------------------------
+-- Streamly.System.Command API coverage
+-------------------------------------------------------------------------------
+
+commandGeneration :: IO ()
+commandGeneration = do
+    S.fold Fold.toList (Command.toBytes "echo 'hello world'")
+        >>= (`shouldBe` ascii "hello world\n")
+    S.fold Fold.toList (concatArr (Command.toChunks "echo hello"))
+        >>= (`shouldBe` ascii "hello\n")
+    S.fold Fold.toList
+        (concatArr (Command.toChunksWith (Proc.setCwd (Just "/")) "pwd"))
+        >>= (`shouldBe` ascii "/\n")
+    S.fold Fold.toList (Command.toChars "printf 'h\\303\\251\\n'")
+        >>= (`shouldBe` utf8Text)
+    S.fold Fold.toList (Command.toLines Fold.toList "printf 'a\\nb'")
+        >>= (`shouldBe` ["a", "b"])
+
+commandEffects :: IO ()
+commandEffects = do
+    Command.toString "echo \"hello  world\"" >>= (`shouldBe` "hello  world\n")
+    captureStdout (Command.toStdout "echo hello") >>= (`shouldBe` "hello\n")
+    Command.toNull "echo hello" >>= (`shouldBe` ())
+    failsWith 1 (Command.toNull "false") >>= (`shouldBe` True)
+
+commandTransformation :: IO ()
+commandTransformation = do
+    let input = ascii "hello"
+    S.fold Fold.toList (Command.pipeBytes "tr a-z A-Z" (S.fromList input))
+        >>= (`shouldBe` ascii "HELLO")
+    S.fold Fold.toList
+        (concatArr
+            (Command.pipeChunks "tr a-z A-Z"
+                (S.fromPure (Array.fromList input))))
+        >>= (`shouldBe` ascii "HELLO")
+    S.fold Fold.toList
+        (concatArr
+            (Command.pipeChunksWith (Proc.setCwd (Just "/"))
+                "sh -c 'cat; pwd'"
+                (S.fromPure (Array.fromList input))))
+        >>= (`shouldBe` ascii "hello/\n")
+    S.fold Fold.toList (Command.pipeChars "tr a-z A-Z" (S.fromList "h\233"))
+        >>= (`shouldBe` "H\233")
+
+commandStandalone :: IO ()
+commandStandalone = do
+    Command.foreground id "sh -c 'exit 3'" >>= (`shouldBe` ExitFailure 3)
+    r <- Command.standalone True (True, True, True) id "sh -c 'exit 4'"
+    either Just (const Nothing) r `shouldBe` Just (ExitFailure 4)
+    ph <- Command.daemon id "sleep 10"
+    threadDelay settleTime
+    st <- getProcessExitCode ph
+    terminateProcess ph
+    _ <- waitForProcess ph
+    st `shouldBe` Nothing
+
+commandWithModifiers :: IO ()
+commandWithModifiers = do
+    Cmd.runWith Proc.toString "echo a  'b  c'" >>= (`shouldBe` "a b  c\n")
+    S.fold Fold.toList (Cmd.streamWith Proc.toBytes "echo a")
+        >>= (`shouldBe` ascii "a\n")
+    S.fold Fold.toList
+        (Cmd.pipeWith Proc.pipeBytes "tr a A" (S.fromList (ascii "ab")))
+        >>= (`shouldBe` ascii "Ab")
+
 main :: IO ()
 main = do
     -- Nix does not have "/usr/bin/env", so the execution of test executables
@@ -762,8 +1134,48 @@ main = do
             describe "config modifiers" $ do
                 it "setSession InheritSession after NewSession"
                     setSessionLastWins
+                it "setCwd" setCwdTest
+                it "setEnv" setEnvTest
+                it "closeFiles" closeFilesTest
+                it "newProcessGroup" newProcessGroupTest
+                it "setSession" setSessionTest
+                it "interruptChildOnly" interruptChildOnlyTest
+                it "setUserId" setUserIdTest
+                it "setGroupId" setGroupIdTest
+                it "waitForDescendants" waitForDescendantsTest
+
+            describe "exceptions" $ do
+                it "ProcessFailure displayException" processFailureDisplay
+                it "ProcessFailure on a signal" processFailureSignal
+                it "executable does not exist" execFailure
+
+            describe "generation" $ do
+                it "toChunks" toChunksEcho
+                it "toBytes" toBytesEcho
+                it "toBytesWith" toBytesWithCwd
+                it "toChars" toCharsUtf8
+                it "toChars with invalid UTF-8" toCharsInvalidUtf8
+                it "toLines" toLinesSplit
+                it "toChunksEitherWith" toChunksEitherWithCwd
+
+            describe "effects" $ do
+                it "toString" toStringEcho
+                it "toString on failure" toStringFailure
+                it "toStdout" toStdoutEcho
+                it "toNull" toNullEcho
+                it "toNull on failure" toNullFailure
+
+            describe "transformation" $ do
+                it "pipeChunksWith" pipeChunksWithEnv
+                it "pipeChunksEitherWith" pipeChunksEitherWithCwd
+
+            describe "internal" $ do
+                it "pipeChars" pipeCharsCat
+                it "stdio modifiers" internalModifiers
 
             describe "standalone processes" $ do
+                it "foreground" foregroundExitCode
+                it "standalone closes stdio" standaloneCloseStreams
                 it "daemon keeps the process running" daemonKeepsRunning
                 it "standalone False keeps the process running"
                     standaloneNoWaitKeepsRunning
@@ -771,6 +1183,12 @@ main = do
                     standaloneWaitExitCode
 
         describe "Streamly.System.Command" $ do
+            it "generation" commandGeneration
+            it "effects" commandEffects
+            it "transformation" commandTransformation
+            it "standalone processes" commandStandalone
+            it "runWith, streamWith, pipeWith" commandWithModifiers
+
             describe "invalid command strings" $ do
                 let forEach name f =
                         mapM_ (\c -> it (name ++ " " ++ show c) (f c))

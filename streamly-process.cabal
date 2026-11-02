@@ -172,3 +172,5 @@ test-suite Test.System.Process
     , process           >= 1.0   && < 1.7
     -- Uses internal APIs
     , streamly-core
+  if !os(windows)
+    build-depends: unix >= 2.5 && < 2.9
