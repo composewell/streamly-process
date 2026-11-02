@@ -461,6 +461,10 @@ setGroupId x (Config cfg) =
 -- handle these signals we can choose to ignore these signals in the parent
 -- until the child exits.
 --
+-- If the child process is terminated by SIGINT, a @UserInterrupt@ exception
+-- is raised in the parent when it waits for the child, instead of reporting
+-- the exit code.
+--
 -- POSIX only. Default is 'False'.
 interruptChildOnly :: Bool -> Config -> Config
 interruptChildOnly x (Config cfg) = Config $ cfg { delegate_ctlc = x }
@@ -1247,6 +1251,9 @@ standalone wait (close_stdin, close_stdout, close_stderr) modCfg path args =
 --
 -- This is the same as the common @system@ function found in other libraries
 -- used to execute commands.
+--
+-- If the process is terminated by SIGINT, a @UserInterrupt@ exception is
+-- raised instead of returning the exit code, see 'interruptChildOnly'.
 --
 -- On Windows you can pass @setSession NewConsole@ to create a new console.
 --

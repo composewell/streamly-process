@@ -8,8 +8,10 @@
   exit code for a process killed by a signal, the unspecified order of
   stdout and stderr values in the `Either` APIs, the decoding of invalid
   UTF-8, line splitting in `toLines`, termination of the process when the
-  output stream is abandoned, the privileges needed by `setUserId`, and the
-  differences between command string parsing and a POSIX shell.
+  output stream is abandoned, the privileges needed by `setUserId`, the
+  `UserInterrupt` exception raised by `foreground` and `interruptChildOnly`
+  when the child is killed by SIGINT, and the differences between command
+  string parsing and a POSIX shell.
 
 ### Bug fixes
 

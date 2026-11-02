@@ -459,6 +459,9 @@ standalone wait streams modCfg =
 -- This is the same as the common @system@ function found in other libraries
 -- used to execute commands.
 --
+-- If the process is terminated by SIGINT, a @UserInterrupt@ exception is
+-- raised instead of returning the exit code.
+--
 -- On Windows you can pass @setSession NewConsole@ to create a new console.
 --
 {-# INLINE foreground #-}

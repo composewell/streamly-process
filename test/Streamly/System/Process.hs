@@ -14,7 +14,13 @@ import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
 import Control.Concurrent (threadDelay)
 import Control.Exception
-    (Exception, IOException, displayException, finally, try)
+    ( AsyncException(..)
+    , Exception
+    , IOException
+    , displayException
+    , finally
+    , try
+    )
 import Numeric (readHex)
 import GHC.IO.Exception (IOErrorType(..))
 import System.Environment (setEnv)
@@ -538,7 +544,9 @@ pipeBytesInfiniteInput = do
 
 pipeChunksNoInputRead :: IO ()
 pipeChunksNoInputRead = do
-    r <- S.fold Fold.toList $ concatArr $ Proc.pipeChunks "true" [] largeInputChunks
+    r <- S.fold Fold.toList
+        $ concatArr
+        $ Proc.pipeChunks "true" [] largeInputChunks
     r `shouldBe` []
 
 pipeChunksEitherStdinClosed :: IO ()
@@ -595,7 +603,8 @@ toChunksEitherInheritStdout = do
 -------------------------------------------------------------------------------
 
 -- | Run a command with a config modifier and return its stdout as a string.
-toStringWith :: (Proc.Config -> Proc.Config) -> FilePath -> [String] -> IO String
+toStringWith ::
+    (Proc.Config -> Proc.Config) -> FilePath -> [String] -> IO String
 toStringWith modCfg path args =
     S.fold Fold.toList
         $ Unicode.decodeUtf8
@@ -847,6 +856,20 @@ foregroundExitCode :: IO ()
 foregroundExitCode = do
     Proc.foreground id "sh" ["-c", "exit 3"] >>= (`shouldBe` ExitFailure 3)
     Proc.foreground id "true" [] >>= (`shouldBe` ExitSuccess)
+
+-- | With interruptChildOnly, a child killed by SIGINT raises UserInterrupt.
+foregroundSigInt :: IO ()
+foregroundSigInt = do
+    r <- try (Proc.foreground id "sh" ["-c", "kill -INT $$"])
+    r `shouldBe` Left UserInterrupt
+    r1 <- try
+        $ S.fold Fold.drain
+        $ Proc.toChunksWith (Proc.interruptChildOnly True)
+            "sh" ["-c", "kill -INT $$"]
+    r1 `shouldBe` Left UserInterrupt
+    failsWith (-2)
+        (S.fold Fold.drain (Proc.toChunks "sh" ["-c", "kill -INT $$"]))
+        >>= (`shouldBe` True)
 
 -- | Whether the descriptor is open in a process run by @standalone True@.
 -- @test -e@ is a shell builtin, the shell does not open any file before it.
@@ -1178,6 +1201,7 @@ main = do
 
             describe "standalone processes" $ do
                 it "foreground" foregroundExitCode
+                it "foreground, child killed by SIGINT" foregroundSigInt
                 it "standalone closes stdio" standaloneCloseStreams
                 it "daemon keeps the process running" daemonKeepsRunning
                 it "standalone False keeps the process running"
