@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main (main) where
 
@@ -11,7 +12,9 @@ import Data.List ((\\))
 import Data.Maybe (fromMaybe)
 import Data.Word (Word8)
 import Control.Concurrent (threadDelay)
-import Control.Exception (Exception)
+import Control.Exception (Exception, IOException, try)
+import GHC.IO.Exception (IOErrorType(..))
+import System.IO.Error (ioeGetErrorType)
 import Control.Monad (unless)
 import Control.Monad.Catch (throwM, catch)
 import Control.Monad.IO.Class (MonadIO(..))
@@ -22,7 +25,8 @@ import System.Directory (removeFile, findExecutable, doesFileExist)
 import System.Exit (ExitCode(..), exitSuccess)
 import System.IO (IOMode(..), openFile, hClose)
 import System.Process (getProcessExitCode, terminateProcess, waitForProcess)
-import Test.Hspec (describe, hspec, it, shouldBe)
+import Test.Hspec
+    (describe, expectationFailure, hspec, it, shouldBe, shouldSatisfy)
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
     ( forAll
@@ -42,7 +46,7 @@ import qualified Streamly.Data.Stream as Stream
 
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
 import qualified Streamly.Internal.System.Process as IProc
-import qualified Streamly.Internal.System.Command as Cmd (shellWord)
+import qualified Streamly.Internal.System.Command as Cmd
 
 -------------------------------------------------------------------------------
 -- Compatibility
@@ -639,6 +643,42 @@ standaloneWaitExitCode = do
     r <- Proc.standalone True (True, True, True) id "sh" ["-c", "exit 3"]
     either Just (const Nothing) r `shouldBe` Just (ExitFailure 3)
 
+-------------------------------------------------------------------------------
+-- Invalid command strings
+-------------------------------------------------------------------------------
+
+-- | The action must raise an 'IOException' of type 'InvalidArgument'.
+shouldBeInvalidArg :: Show a => IO a -> IO ()
+shouldBeInvalidArg action = do
+    r <- try action
+    case r of
+        Left (e :: IOException) ->
+            (ioeGetErrorType e, e) `shouldSatisfy` ((== InvalidArgument) . fst)
+        Right v ->
+            expectationFailure
+                $ "expected an InvalidArgument IOException, got " ++ show v
+
+-- | Command strings that are empty or cannot be parsed.
+invalidCommands :: [String]
+invalidCommands =
+    [ ""
+    , "   "
+    , "echo 'hello"
+    , "echo \"hello"
+    , "echo hello\\"
+    ]
+
+invalidCommandRunWith :: String -> IO ()
+invalidCommandRunWith cmd = shouldBeInvalidArg (Cmd.toString cmd)
+
+invalidCommandStreamWith :: String -> IO ()
+invalidCommandStreamWith cmd =
+    shouldBeInvalidArg (S.fold Fold.toList (Cmd.toBytes cmd))
+
+invalidCommandPipeWith :: String -> IO ()
+invalidCommandPipeWith cmd =
+    shouldBeInvalidArg (S.fold Fold.toList (Cmd.pipeBytes cmd S.nil))
+
 shellWordTest :: String -> [String] -> IO ()
 shellWordTest inp expected = do
     res <-
@@ -729,6 +769,15 @@ main = do
                     standaloneNoWaitKeepsRunning
                 it "standalone True returns the exit code"
                     standaloneWaitExitCode
+
+        describe "Streamly.System.Command" $ do
+            describe "invalid command strings" $ do
+                let forEach name f =
+                        mapM_ (\c -> it (name ++ " " ++ show c) (f c))
+                            invalidCommands
+                forEach "toString" invalidCommandRunWith
+                forEach "toBytes" invalidCommandStreamWith
+                forEach "pipeBytes" invalidCommandPipeWith
 
             describe "shellWord" $ do
                 it "Single quote test" $

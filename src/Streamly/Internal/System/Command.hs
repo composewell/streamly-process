@@ -46,8 +46,10 @@ module Streamly.Internal.System.Command
     )
 where
 
-import Control.Monad.Catch (MonadCatch)
+import Control.Exception (displayException)
+import Control.Monad.Catch (MonadCatch, throwM)
 import Data.Char (isSpace)
+import GHC.IO.Exception (IOException(..), IOErrorType(..))
 import Data.Word (Word8)
 import Streamly.Data.Array (Array)
 import Streamly.Data.Fold (Fold)
@@ -103,6 +105,40 @@ shellWord =
 quotedWord :: MonadCatch m => Parser Char m String
 quotedWord = shellWord
 
+-- | An 'IOException' of type 'InvalidArgument' for an invalid command
+-- string.
+invalidCommand :: String -> String -> String -> IOException
+invalidCommand fname reason cmd =
+    IOError
+        { ioe_handle = Nothing
+        , ioe_type = InvalidArgument
+        , ioe_location = fname
+        , ioe_description = "command " ++ show cmd ++ ": " ++ reason
+        , ioe_errno = Nothing
+        , ioe_filename = Nothing
+        }
+
+-- | Split a command string into the executable and its arguments using
+-- 'shellWord'. Raise an 'IOException' of type 'InvalidArgument' if the
+-- command is empty or cannot be parsed. The first argument is the name of
+-- the calling function, used in the exception.
+{-# INLINE parseCommand #-}
+parseCommand :: MonadCatch m => String -> String -> m (FilePath, [String])
+parseCommand fname cmd = do
+    xs <-
+        Stream.fold Fold.toList
+            $ Stream.mapM (either parseFailed return)
+            $ Stream.parseMany shellWord
+            $ Stream.fromList cmd
+    case xs of
+        -- shellWord returns one empty word for an all-whitespace string.
+        y:ys | not (all isSpace cmd) -> return (y, ys)
+        _ -> throwM $ invalidCommand fname "empty command" cmd
+
+    where
+
+    parseFailed e = throwM $ invalidCommand fname (displayException e) cmd
+
 -- | A modifier for stream generation APIs in "Streamly.System.Process" to
 -- generate streams from command strings.
 --
@@ -113,19 +149,18 @@ quotedWord = shellWord
 -- >>> streamWith Process.toChunks "echo hello" & Stdio.putChunks
 -- hello
 --
+-- An 'IOException' of type 'InvalidArgument' is raised if the command string
+-- is empty or cannot be parsed by 'shellWord', e.g. it has an unterminated
+-- quote.
+--
 -- /Internal/
 {-# INLINE streamWith #-}
 streamWith :: MonadCatch m =>
     (FilePath -> [String] -> Stream m a) -> String -> Stream m a
 streamWith f cmd =
     Stream.concatEffect $ do
-        xs <- Stream.fold Fold.toList
-                $ Stream.catRights
-                $ Stream.parseMany shellWord
-                $ Stream.fromList cmd
-        case xs of
-            y:ys -> return $ f y ys
-            _ -> error "streamWith: empty command"
+        (y, ys) <- parseCommand "streamWith" cmd
+        return $ f y ys
 
 -- | A modifier for process running APIs in "Streamly.System.Process" to run
 -- command strings.
@@ -137,18 +172,17 @@ streamWith f cmd =
 -- >>> runWith Process.toStdout "echo hello"
 -- hello
 --
+-- An 'IOException' of type 'InvalidArgument' is raised if the command string
+-- is empty or cannot be parsed by 'shellWord', e.g. it has an unterminated
+-- quote.
+--
 -- /Internal/
 {-# INLINE runWith #-}
 runWith :: MonadCatch m =>
     (FilePath -> [String] -> m a) -> String -> m a
 runWith f cmd = do
-    xs <- Stream.fold Fold.toList
-            $ Stream.catRights
-            $ Stream.parseMany shellWord
-            $ Stream.fromList cmd
-    case xs of
-        y:ys -> f y ys
-        _ -> error "streamWith: empty command"
+    (y, ys) <- parseCommand "runWith" cmd
+    f y ys
 
 -- | A modifier for process piping APIs in "Streamly.System.Process" to pipe
 -- data through processes specified by command strings.
@@ -162,6 +196,10 @@ runWith f cmd = do
 --  :}
 --HELLO
 --
+-- An 'IOException' of type 'InvalidArgument' is raised if the command string
+-- is empty or cannot be parsed by 'shellWord', e.g. it has an unterminated
+-- quote.
+--
 -- /Internal/
 pipeWith :: MonadCatch m =>
        (FilePath -> [String] -> Stream m a -> Stream m b)
@@ -170,13 +208,8 @@ pipeWith :: MonadCatch m =>
     -> Stream m b
 pipeWith f cmd input =
     Stream.concatEffect $ do
-        xs <- Stream.fold Fold.toList
-                $ Stream.catRights
-                $ Stream.parseMany shellWord
-                $ Stream.fromList cmd
-        case xs of
-            y:ys -> return $ f y ys input
-            _ -> error "streamWith: empty command"
+        (y, ys) <- parseCommand "pipeWith" cmd
+        return $ f y ys input
 
 -- | Like 'pipeChunks' but use the specified configuration to run the process.
 {-# INLINE pipeChunksWith #-}

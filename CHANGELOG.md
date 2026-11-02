@@ -15,6 +15,12 @@
 * `setSession` now replaces the session behavior set by an earlier
   `setSession`, e.g. `setSession InheritSession . setSession NewSession`
   inherits the session instead of creating a new one.
+* The `Streamly.System.Command` APIs now raise an `IOException` of type
+  `InvalidArgument` if the command string cannot be parsed, e.g. it has an
+  unterminated quote or a trailing backslash. Earlier, the unparsable part
+  was silently dropped and the remaining words were executed. An empty or
+  all-whitespace command string raises the same exception instead of an
+  `ErrorCall` or a failure to execute an empty file name.
 ## 0.4.1 (Apr 2026)
 
 * Rename quotedWord to shellWord

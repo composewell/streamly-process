@@ -99,6 +99,9 @@ module Streamly.System.Command
     -- $setup
 
     -- * Exceptions
+    -- | If the command string is empty or cannot be parsed, e.g. it has an
+    -- unterminated quote, an @IOException@ of type @InvalidArgument@ is
+    -- raised.
       Process.ProcessFailure (..)
 
     -- * Process Configuration
