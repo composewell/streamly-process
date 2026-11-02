@@ -64,3 +64,46 @@ strWith :: ([StrSegment] -> [StrSegment]) -> QuasiQuoter
 ```
 
 with `StrSegment` exported from an internal module.
+
+## Backslash-newline in `shellWord`
+
+Status: verified, not fixed.
+
+In a POSIX shell, a backslash followed by a newline is a line continuation:
+the backslash and the newline are both removed, outside quotes and inside
+double quotes. Inside single quotes both characters are kept.
+
+`shellWord` (in `Streamly.Internal.System.Command`) keeps the newline in
+unquoted text and keeps both characters in double-quoted text. Results with
+`streamly-core-0.3.0`, comparing `sh -c 'printf "[%s]" ...'` with
+`shellWord` (`\` and newline written as in the command text):
+
+| Input             | `sh`             | `shellWord`              |
+|-------------------|------------------|--------------------------|
+| `foo \<nl>bar`    | `foo`, `bar`     | `foo`, `"\nbar"`         |
+| `foo ab\<nl>cd`   | `foo`, `abcd`    | `foo`, `"ab\ncd"`        |
+| `foo "ab\<nl>cd"` | `foo`, `abcd`    | `foo`, `"ab\\\ncd"`      |
+| `foo 'ab\<nl>cd'` | `foo`, `ab\<nl>cd` | `foo`, `"ab\\\ncd"`    |
+
+Only the single-quoted case matches.
+
+### Upstream: `wordWithQuotes` in streamly-core
+
+`shellWord` is `Parser.wordWithQuotes` with `\` as the escape character.
+`wordWithQuotes` cannot express the shell behaviour:
+
+- Outside quotes, an escape always removes the escape character and keeps
+  the next character literally. There is no way to remove both characters.
+- Inside quotes, the translation function has type
+  `Char -> Char -> Maybe Char`, so an escape sequence can be translated to
+  one character or left as it is, but not deleted.
+
+Preprocessing the command string to remove backslash-newline is not
+correct, because it must not be removed inside single quotes, so the
+preprocessor would have to parse quotes as well.
+
+Possible change in `wordWithQuotes`: let the escape translation return
+`Maybe String` (or a type that can express deletion), and apply a
+translation to unquoted escapes too. `shellWord` would then map
+backslash-newline to the empty string outside quotes and inside double
+quotes.
