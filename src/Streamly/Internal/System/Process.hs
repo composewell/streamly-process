@@ -407,6 +407,11 @@ setSession x (Config cfg) =
 -- executing the command. The parent process must have sufficient privileges to
 -- set the user id.
 --
+-- The supplementary groups of the new process are set to those of the user,
+-- using @initgroups@, which requires root privileges. Therefore, an
+-- unprivileged parent gets an @IOException@ even when the user id is its own
+-- user id.
+--
 -- POSIX only. See the POSIX
 -- <https://man7.org/linux/man-pages/man2/setuid.2.html setuid>
 -- man page.
@@ -499,6 +504,10 @@ inheritStdout (Config cfg) = Config $ cfg { std_out = Inherit }
 -- exception info to aid debugging.
 
 -- | An exception that is raised when a process fails.
+--
+-- The 'Int' is the exit code of the process. On POSIX, if the process is
+-- terminated by a signal, it is the negated signal number, e.g. @-15@ for
+-- SIGTERM.
 --
 -- @since 0.1.0
 newtype ProcessFailure = ProcessFailure Int -- ^ The exit code of the process.
@@ -876,7 +885,8 @@ processBytes = pipeBytes
 -- For control over the input buffer use your own chunking and chunk based
 -- APIs.
 --
--- NOTE: This API uses UTF-8 encoding.
+-- NOTE: This API uses UTF-8 encoding. Invalid UTF-8 output of the process
+-- is decoded as the Unicode replacement character U+FFFD.
 --
 -- >>> :{
 --    Process.toChars "echo" ["hello world"]
@@ -1077,7 +1087,8 @@ toChunks = toChunksWith id
 -- | @toChars path args@ runs the executable specified by @path@ using @args@
 -- as arguments and returns the output of the process as a stream of chars.
 --
--- NOTE: This API uses UTF-8 encoding.
+-- NOTE: This API uses UTF-8 encoding. Invalid UTF-8 input is decoded as the
+-- Unicode replacement character U+FFFD.
 --
 -- Raises 'ProcessFailure' exception in case of failure.
 --
@@ -1097,7 +1108,12 @@ toChars path args = toBytes path args & Unicode.decodeUtf8
 -- as arguments and folds the output of the process at line breaks, using the
 -- fold @f@, to return a stream of folded lines.
 --
--- NOTE: This API uses UTF-8 encoding.
+-- Lines are split at @\\n@, the newline is not included in the line. A
+-- @\\r@ before the newline is kept. If the output does not end with a
+-- newline, the text after the last newline is the last line.
+--
+-- NOTE: This API uses UTF-8 encoding. Invalid UTF-8 input is decoded as the
+-- Unicode replacement character U+FFFD.
 --
 -- Raises 'ProcessFailure' exception in case of failure.
 --
@@ -1121,7 +1137,10 @@ toLines f path args = toChars path args & Unicode.lines f
 -- | @toString path args@ runs the executable specified by @path@ using @args@
 -- as arguments and folds the entire output of the process as a single string.
 --
--- NOTE: This API uses UTF-8 encoding.
+-- NOTE: This API uses UTF-8 encoding. Invalid UTF-8 input is decoded as the
+-- Unicode replacement character U+FFFD.
+--
+-- Raises 'ProcessFailure' exception in case of failure.
 --
 -- Definition:
 --
@@ -1181,7 +1200,7 @@ toNull path args = toChunks path args & Stream.fold Fold.drain
 -- the IO streams with other processes. The IO streams stdin, stdout, stderr
 -- can either be inherited from the parent or closed.
 --
--- This API is more powerful than 'interactive' and 'daemon' and can be used to
+-- This API is more powerful than 'foreground' and 'daemon' and can be used to
 -- implement both of these. However, it should be used carefully e.g. if you
 -- inherit the IO streams and parent is not waiting for the child process to
 -- finish then both parent and child may use the IO streams resulting in
@@ -1261,6 +1280,9 @@ interactive = foreground
 -- | Launch a daemon process. Closes stdin, stdout and stderr, creates a new
 -- session, detached from the terminal, the parent does not wait for the
 -- process to finish.
+--
+-- Since the descriptors 0, 1 and 2 are closed, not connected to
+-- @\/dev\/null@, the next files opened by the daemon get these descriptors.
 --
 -- The 'ProcessHandle' returned can be used to terminate the daemon or send
 -- signals to it. Call @waitForProcess@ on it to reap the process after it

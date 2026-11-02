@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Documentation
+
+* Document the exceptions raised when the executable cannot be found, the
+  exit code for a process killed by a signal, the unspecified order of
+  stdout and stderr values in the `Either` APIs, the decoding of invalid
+  UTF-8, line splitting in `toLines`, termination of the process when the
+  output stream is abandoned, the privileges needed by `setUserId`, and the
+  differences between command string parsing and a POSIX shell.
+
 ### Bug fixes
 
 * `daemon` and `standalone False` no longer terminate the process with

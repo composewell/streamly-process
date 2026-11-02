@@ -428,7 +428,7 @@ toNull = runWith Process.toNull
 -- the IO streams with other processes. The IO streams stdin, stdout, stderr
 -- can either be inherited from the parent or closed.
 --
--- This API is more powerful than 'interactive' and 'daemon' and can be used to
+-- This API is more powerful than 'foreground' and 'daemon' and can be used to
 -- implement both of these. However, it should be used carefully e.g. if you
 -- inherit the IO streams and parent is not waiting for the child process to
 -- finish then both parent and child may use the IO streams resulting in

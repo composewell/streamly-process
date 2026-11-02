@@ -105,7 +105,9 @@ module Streamly.System.Command
     -- * Exceptions
     -- | If the command string is empty or cannot be parsed, e.g. it has an
     -- unterminated quote, an @IOException@ of type @InvalidArgument@ is
-    -- raised.
+    -- raised. If the executable cannot be found or executed, an
+    -- @IOException@ is raised. A 'Process.ProcessFailure' exception is
+    -- raised if the process exits with a non-zero exit code.
       Process.ProcessFailure (..)
 
     -- * Process Configuration

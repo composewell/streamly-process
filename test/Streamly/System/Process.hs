@@ -792,11 +792,14 @@ toCharsInvalidUtf8 =
     S.fold Fold.toList (Proc.toChars "printf" ["a\\377b"])
         >>= (`shouldBe` "a\65533b")
 
--- | The last line is emitted even without a trailing newline.
+-- | The last line is emitted even without a trailing newline. A carriage
+-- return before the newline is kept.
 toLinesSplit :: IO ()
-toLinesSplit =
+toLinesSplit = do
     S.fold Fold.toList (Proc.toLines Fold.toList "printf" ["a\\nb\\n\\nc"])
         >>= (`shouldBe` ["a", "b", "", "c"])
+    S.fold Fold.toList (Proc.toLines Fold.toList "printf" ["a\\r\\nb"])
+        >>= (`shouldBe` ["a\r", "b"])
 
 toStringEcho :: IO ()
 toStringEcho = Proc.toString "echo" ["hello"] >>= (`shouldBe` "hello\n")

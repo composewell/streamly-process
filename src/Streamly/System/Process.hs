@@ -103,6 +103,15 @@ module Streamly.System.Process
     -- nothing special about exception handling, it works the same as in
     -- Streamly.  Like the @pipefail@ option in shells, exceptions are
     -- propagated if any of the stages fail.
+    --
+    -- A 'ProcessFailure' exception is raised if the process exits with a
+    -- non-zero exit code. If the executable cannot be found or executed, an
+    -- @IOException@ is raised when the stream is evaluated.
+    --
+    -- If the output stream is abandoned before it ends, e.g. by using
+    -- @Stream.take@, the process is terminated with SIGTERM only when the
+    -- stream is garbage collected. Until then the process keeps running, or
+    -- stays blocked writing to the full output pipe.
       ProcessFailure (..)
 
     -- * Process Configuration
@@ -150,6 +159,10 @@ module Streamly.System.Process
     -- | Like other "Generation" routines but along with stdout, stderr is also
     -- included in the output stream. stdout is converted to 'Right' values in
     -- the output stream and stderr is converted to 'Left' values.
+    --
+    -- stdout and stderr are read concurrently, therefore, the order of the
+    -- 'Left' values relative to the 'Right' values is not specified, it may
+    -- differ from the order in which the process wrote them.
     , toBytesEither
     , toChunksEither
     , toChunksEitherWith
