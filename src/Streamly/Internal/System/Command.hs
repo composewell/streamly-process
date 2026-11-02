@@ -68,9 +68,19 @@ import qualified Streamly.Internal.System.Process as Process
 
 #include "DocTestCommand.hs"
 
--- | Posix compliant quoted shell command string parsing with escaping:
+-- | Parse one word of a command string, processing quotes and escapes as
+-- in a POSIX shell:
 --
--- Quotes and escapes are parsed as in a standard POSIX shell.
+-- * Words are separated by whitespace.
+-- * Outside quotes, a backslash is removed and the next character is taken
+--   literally, e.g. @a\\ b@ is the single word @a b@.
+-- * Inside single quotes all characters are literal, including the
+--   backslash.
+-- * Inside double quotes, a backslash before @$@, @`@, @"@ or @\\@ is
+--   removed; before any other character the backslash is kept.
+-- * Quoted and unquoted parts with no whitespace between them form one word,
+--   e.g. @'a'"b"c@ is the word @abc@.
+--
 -- Examples (using shell @echo@ command):
 --
 -- $ echo 'hello\\"world'
@@ -81,6 +91,19 @@ import qualified Streamly.Internal.System.Process as Process
 --
 -- $ echo 'hello\'
 -- hello\
+--
+-- The parser fails if a quote is not terminated or if the input ends with a
+-- backslash.
+--
+-- Differences from a POSIX shell:
+--
+-- * No expansion is performed: @$VAR@, @~@, globs and command substitution
+--   are passed literally.
+-- * Operators such as @|@, @;@, @&&@, @>@ and @<@ are ordinary characters.
+-- * A backslash followed by a newline is not removed. Outside quotes the
+--   newline is kept, inside double quotes both characters are kept.
+-- * When used with @parseMany@, an input consisting only of whitespace
+--   produces one empty word.
 {-# INLINE shellWord #-}
 shellWord :: MonadCatch m => Parser Char m String
 shellWord =
@@ -89,13 +112,14 @@ shellWord =
                 '"' -> Just x
                 '\'' -> Just x
                 _ -> Nothing
-        -- Inside ",
-        -- \\ is translated to \
-        -- \" is translated to "
+        -- Inside double quotes, the backslash is removed before these
+        -- characters.
         trEsc '"' x =
             case x of
                 '\\' -> Just '\\'
                 '"' -> Just '"'
+                '$' -> Just '$'
+                '`' -> Just '`'
                 _ -> Nothing
         trEsc _ _ = Nothing
      in Parser.wordWithQuotes False trEsc '\\' toRQuote isSpace Fold.toList

@@ -28,6 +28,10 @@
 -- Single quotes inside double quotes or vice-versa are treated as normal
 -- characters.
 --
+-- Unlike a shell, no expansion is performed: @$VAR@, @~@, globs and command
+-- substitution are passed to the executable literally. Shell operators such
+-- as @|@, @;@, @&&@, @>@ and @<@ are ordinary characters.
+--
 -- You can use the string quasiquoter 'Streamly.Unicode.String.str' to write
 -- commands conveniently, it allows Haskell variable expansion as well e.g.:
 --

@@ -790,3 +790,19 @@ main = do
                 it "Double quote test, escape at end" $
                     shellWordTest "'hello\\'" ["hello\\"]
 #endif
+                -- POSIX: in double quotes a backslash escapes only the
+                -- characters dollar, backquote, double quote, backslash.
+                it "Double quote, escaped dollar" $
+                    shellWordTest "\"a\\$b\"" ["a$b"]
+                it "Double quote, escaped backquote" $
+                    shellWordTest "\"a\\`b\"" ["a`b"]
+                it "Double quote, backslash before other char is kept" $
+                    shellWordTest "\"a\\b\"" ["a\\b"]
+                it "Unquoted escaped space" $
+                    shellWordTest "a\\ b" ["a b"]
+                it "Multiple spaces" $
+                    shellWordTest " a  b " ["a", "b"]
+                it "Adjacent quoted parts form one word" $
+                    shellWordTest "'a'\"b\"c" ["abc"]
+                it "Empty quotes are an empty word" $
+                    shellWordTest "\"\" ''" ["", ""]

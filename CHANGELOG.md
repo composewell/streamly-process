@@ -21,6 +21,8 @@
   was silently dropped and the remaining words were executed. An empty or
   all-whitespace command string raises the same exception instead of an
   `ErrorCall` or a failure to execute an empty file name.
+* In a double quoted part of a command string, a backslash before `$` or
+  `` ` `` is now removed, as in a POSIX shell.
 ## 0.4.1 (Apr 2026)
 
 * Rename quotedWord to shellWord
