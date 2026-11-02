@@ -665,6 +665,9 @@ pipeChunksWithAction run modCfg path args =
 
     alloc = createProc' modCfg path args
 
+whenJustS :: Applicative m => (a -> Stream m b) -> Maybe a -> Stream m b
+whenJustS action mb = maybe Stream.nil action mb
+
 -- Note: It is allowed to inheritStdout or inheritStderr but not both as that
 -- would not generate a stream for further processing.
 -- inheritStdin has no affect, we always pipe the input stream to the process's
@@ -687,10 +690,10 @@ pipeChunksEitherWith modifier path args input =
 
     run (_, Nothing, Nothing, _) =
         error "pipeChunksEitherWith: only one of stdout or stderr can be inherited"
-    run (Just stdinH, Just stdoutH, Just stderrH, _) =
+    run (Just stdinH, stdoutMaybe, stderrMaybe, _) =
         putChunksClose stdinH input
-            `parallel` fmap Left (toChunksClose stderrH)
-            `parallel` fmap Right (toChunksClose stdoutH)
+            `parallel` fmap Left (whenJustS toChunksClose stderrMaybe)
+            `parallel` fmap Right (whenJustS toChunksClose stdoutMaybe)
     run _ = error "pipeChunksEitherWith: Not reachable"
 
 -- | Like 'pipeChunks' but also includes stderr as 'Left' stream in the
@@ -861,9 +864,6 @@ processBytes ::
     -> Stream m Word8    -- ^ Input Stream
     -> Stream m Word8    -- ^ Output Stream
 processBytes = pipeBytes
-
-whenJustS :: Applicative m => (a -> Stream m b) -> Maybe a -> Stream m b
-whenJustS action mb = maybe Stream.nil action mb
 
 -- | Like 'pipeChunks' except that its input and output is stream of chars
 -- instead of a stream of chunks. The input to the pipe is buffered with a

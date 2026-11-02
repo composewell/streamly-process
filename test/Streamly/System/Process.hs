@@ -40,6 +40,7 @@ import qualified Streamly.System.Process as Proc
 import qualified Streamly.Data.Stream as Stream
 
 import qualified Streamly.Internal.FileSystem.Handle as FH (putBytes, read)
+import qualified Streamly.Internal.System.Process as IProc
 import qualified Streamly.Internal.System.Command as Cmd (shellWord)
 
 -------------------------------------------------------------------------------
@@ -547,6 +548,29 @@ pipeChunksNoInputReadFailure = do
     r `shouldBe` Just 2
 
 -------------------------------------------------------------------------------
+-- Inheriting stdout in the Either APIs
+-------------------------------------------------------------------------------
+
+-- | With stdout inherited only the stderr stream is produced. The process
+-- writes nothing to stdout to keep the test output clean.
+pipeChunksEitherInheritStdout :: IO ()
+pipeChunksEitherInheritStdout = do
+    r <- S.fold Fold.toList
+        $ fmap (either (Left . Array.toList) (Right . Array.toList))
+        $ IProc.pipeChunksEitherWith
+            IProc.inheritStdout "sh" ["-c", "cat >&2"]
+            (S.fromPure (Array.fromList [104, 105]))
+    r `shouldBe` [Left [104, 105]]
+
+toChunksEitherInheritStdout :: IO ()
+toChunksEitherInheritStdout = do
+    r <- S.fold Fold.toList
+        $ fmap (either (Left . Array.toList) (Right . Array.toList))
+        $ IProc.toChunksEitherWith
+            IProc.inheritStdout "sh" ["-c", "printf hi >&2"]
+    r `shouldBe` [Left [104, 105]]
+
+-------------------------------------------------------------------------------
 -- Standalone processes
 -------------------------------------------------------------------------------
 
@@ -655,6 +679,12 @@ main = do
                 it "pipeBytesEither head -c 1" pipeBytesEitherPartialInput
                 it "pipeChunks failing without reading"
                     pipeChunksNoInputReadFailure
+
+            describe "inheritStdout" $ do
+                it "pipeChunksEitherWith inheritStdout"
+                    pipeChunksEitherInheritStdout
+                it "toChunksEitherWith inheritStdout"
+                    toChunksEitherInheritStdout
 
             describe "standalone processes" $ do
                 it "daemon keeps the process running" daemonKeepsRunning

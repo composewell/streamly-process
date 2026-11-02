@@ -10,6 +10,8 @@
   process exits or closes its stdin before reading all of the input. The
   rest of the input is not consumed and the exit code of the process
   determines the result, like in a shell pipeline.
+* `pipeChunksEitherWith` in the internal module no longer fails with
+  "Not reachable" when stdout is inherited using `inheritStdout`.
 ## 0.4.1 (Apr 2026)
 
 * Rename quotedWord to shellWord
