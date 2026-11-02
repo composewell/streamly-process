@@ -85,6 +85,12 @@ unquoted text and keeps both characters in double-quoted text. Results with
 | `foo "ab\<nl>cd"` | `foo`, `abcd`    | `foo`, `"ab\\\ncd"`      |
 | `foo 'ab\<nl>cd'` | `foo`, `ab\<nl>cd` | `foo`, `"ab\\\ncd"`    |
 
+In the input column `<nl>` is a line break in the command text. In the
+`shellWord` column strings are shown in Haskell notation, so `"\n"` is that
+same line break character and `\\` is one backslash. A backslash followed by
+the letter `n`, as in `echo "x\ny"`, is a different case: `sh` and
+`shellWord` both keep it as the two characters `\n`.
+
 Only the single-quoted case matches.
 
 ### Upstream: `wordWithQuotes` in streamly-core
@@ -97,6 +103,10 @@ Only the single-quoted case matches.
 - Inside quotes, the translation function has type
   `Char -> Char -> Maybe Char`, so an escape sequence can be translated to
   one character or left as it is, but not deleted.
+
+No other parser in `streamly-core` (master, checked 2026-11-03) can delete
+an escape sequence either: `wordFramedBy`, `blockWithQuotes`, `takeEndByEsc`
+and `takeFramedByEsc_` all keep the escaped element.
 
 Preprocessing the command string to remove backslash-newline is not
 correct, because it must not be removed inside single quotes, so the
