@@ -1,4 +1,8 @@
 packages: streamly-process.cabal
 
+-- Cap the heap of GHC, tests and benchmarks so that a build does not
+-- exhaust the machine memory.
+flags: +limit-build-mem
+
 package streamly-process
   ghc-options: -Werror

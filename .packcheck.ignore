@@ -6,6 +6,7 @@ hie.yaml
 appveyor.yml
 default.nix
 stack.yaml
+cabal.project
 cabal.project.d/streamly-master
 cabal.project.d/Werror
 cabal.project.d/streamly-0.9.0

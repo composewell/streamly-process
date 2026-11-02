@@ -63,6 +63,11 @@ flag use-native
   manual: True
   default: False
 
+flag limit-build-mem
+  description: Limit the heap of GHC, test-suite and benchmark processes
+  manual: True
+  default: False
+
 common compile-options
   default-language: Haskell2010
   ghc-options:
@@ -81,6 +86,8 @@ common compile-options
   if !impl(ghc < 9.2)
     ghc-options:
       -Wno-missing-kind-signatures
+  if flag(limit-build-mem)
+    ghc-options: +RTS -M2G -RTS
 
 common optimization-options
   ghc-options:
@@ -121,9 +128,11 @@ library
 -------------------------------------------------------------------------------
 
 common threading-options
-  ghc-options:
-    -threaded
-    -with-rtsopts=-N
+  ghc-options: -threaded
+  if flag(limit-build-mem)
+    ghc-options: "-with-rtsopts=-N -M1G"
+  else
+    ghc-options: -with-rtsopts=-N
 
 benchmark Benchmark.System.Process
   import: compile-options, optimization-options
@@ -131,6 +140,8 @@ benchmark Benchmark.System.Process
     ghc-options: -fplugin Fusion.Plugin
   type: exitcode-stdio-1.0
   main-is: Benchmark/System/Process.hs
+  if flag(limit-build-mem)
+    ghc-options: -with-rtsopts=-M1G
   build-depends:
       streamly-process
     , base              >= 4.8   && < 5
